@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import Book3D from './Book3D'
 import { cleanTafsir, TAFSIR_NOTE, type Ghazal, type Stage } from './types'
+import { world } from './constants'
 
 // On slow devices keep real-time pacing instead of letting gsap stretch the animation frame by frame
 gsap.ticker.lagSmoothing(0)
+world.lit = 0.2 // the room starts nearly dark; the candles come up when the visitor begins
 
 function pick(n: number, niyat: string) {
   let h = 2166136261 ^ Date.now()
@@ -16,9 +18,9 @@ function pick(n: number, niyat: string) {
 // Real page-turn recording (public/audio/flip.mp3), decoded once and replayed with a little pitch variation
 async function loadFlip(ctx: AudioContext) {
   const buf = await ctx.decodeAudioData(await (await fetch(`${import.meta.env.BASE_URL}audio/flip.mp3`)).arrayBuffer())
-  return () => {
-    const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = 0.92 + Math.random() * 0.16
-    const g = ctx.createGain(); g.gain.value = 0.9
+  return (rate = 1, gain = 0.9) => {
+    const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate * (0.94 + Math.random() * 0.12)
+    const g = ctx.createGain(); g.gain.value = gain
     src.connect(g).connect(ctx.destination); src.start()
   }
 }
@@ -38,7 +40,7 @@ export default function App() {
   const [portrait, setPortrait] = useState(innerWidth / innerHeight < 0.9)
   const audio = useRef<HTMLAudioElement | null>(null)
   const prog = useRef({ v: 0 })
-  const flipRef = useRef<() => void>(() => {})
+  const flipRef = useRef<(rate?: number, gain?: number) => void>(() => {})
 
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}ghazals.json`).then(r => r.json()).then(setData) }, [])
   // Back button: the open book and every overlay push a history entry, so the browser / Android back button peels them off one by one
@@ -67,6 +69,7 @@ export default function App() {
     if (!audio.current) { audio.current = new Audio(`${import.meta.env.BASE_URL}audio/sample.wav`); audio.current.loop = true; audio.current.volume = 0.5 }
     const Ctx = window.AudioContext || (window as any).webkitAudioContext
     const ctx = new Ctx(); ctx.resume().catch(() => {}); loadFlip(ctx).then(f => { flipRef.current = f }).catch(() => {})
+    gsap.to(world, { lit: 1, duration: 3.2, ease: 'power2.out' })
     setStage('niyat')
   }
   const takeFal = () => {
@@ -82,8 +85,9 @@ export default function App() {
 
   return (
     <>
-      <Book3D pages={pages} zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
+      <Book3D pages={pages} zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={(r, g) => flipRef.current(r, g)} />
       {stage === 'result' && !showTafsir && !zoomOut && <div className="read-hit" onClick={openTafsir} aria-hidden />}
+      <div className="vignette" />
       <div className="title">فال حافظ</div>
       {showTafsir && ghazal && (
         <div className="modal" onClick={() => unwind()}>

@@ -9,3 +9,6 @@ export const LD = D - 0.08
 export const TH = 0.0015 // half thickness of a leaf
 export const clamp = (x: number) => Math.min(1, Math.max(0, x))
 export const ease = (x: number) => x * x * (3 - 2 * x)
+
+// Shared, mutable scene state written by the UI layer and read inside the render loop (no React re-renders)
+export const world = { lit: 1 } // 0 = candles barely lit, 1 = full light

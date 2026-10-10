@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Html } from '@react-three/drei'
+import { useFrame } from '@react-three/fiber'
 import { M } from './materials'
-import { once, kashiTexture, stoneTexture } from './textures'
+import { once, kashiTexture, stoneTexture, softTexture } from './textures'
 import * as THREE from 'three'
 
 // Things a 14th-century Shirazi poet would have around him: ink and quill, a wine flask and cup,
@@ -73,12 +74,19 @@ function Scroll() {
   )
 }
 
-function Astrolabe() {
+function Astrolabe() { // fate and the stars: the rete turns very slowly
+  const rete = useRef<THREE.Group>(null)
+  useFrame(({ clock }) => { if (rete.current) rete.current.rotation.y = clock.elapsedTime * 0.1 })
   return (
     <group>
       <mesh position-y={0.014}><cylinderGeometry args={[0.24, 0.24, 0.028, 40]} /><primitive object={M.brass} attach="material" /></mesh>
       <mesh position-y={0.03} rotation-x={Math.PI / 2}><torusGeometry args={[0.2, 0.012, 8, 40]} /><primitive object={M.brass} attach="material" /></mesh>
-      <mesh position-y={0.034} rotation-x={Math.PI / 2}><torusGeometry args={[0.1, 0.008, 8, 32]} /><primitive object={M.brass} attach="material" /></mesh>
+      <group ref={rete} position-y={0.036}>
+        <mesh rotation-x={Math.PI / 2}><torusGeometry args={[0.1, 0.008, 8, 32]} /><primitive object={M.gold} attach="material" /></mesh>
+        <mesh rotation-x={-Math.PI / 2} position={[0.1, 0, 0]}><circleGeometry args={[0.018, 8]} /><primitive object={M.gold} attach="material" /></mesh>
+        <mesh rotation-x={-Math.PI / 2} position={[-0.06, 0, 0.08]}><circleGeometry args={[0.012, 8]} /><primitive object={M.gold} attach="material" /></mesh>
+        <mesh rotation-x={-Math.PI / 2} position={[0, 0.001, 0]}><ringGeometry args={[0.02, 0.19, 3, 1]} /><meshStandardMaterial color="#d9a441" metalness={0.8} roughness={0.3} side={THREE.DoubleSide} /></mesh>
+      </group>
       <mesh position={[0, 0.04, -0.27]} rotation-x={Math.PI / 2}><torusGeometry args={[0.04, 0.012, 8, 20]} /><primitive object={M.brass} attach="material" /></mesh>
     </group>
   )
@@ -122,14 +130,29 @@ function Tomb() { // the Hafezieh pavilion in Shiraz; he died in 792 AH (1390 CE
   )
 }
 
-function Hourglass() { // passing time, and death
+function Hourglass() { // passing time, and death: the sand really runs, then the glass turns over
+  const root = useRef<THREE.Group>(null), up = useRef<THREE.Mesh>(null), down = useRef<THREE.Mesh>(null), stream = useRef<THREE.Mesh>(null)
+  useFrame(({ clock }) => {
+    const T = 36, t = clock.elapsedTime, k = Math.floor(t / T), c = t % T
+    const f = Math.min(1, c / 30), flip = c > 31 ? Math.min(1, (c - 31) / 2.2) : 0 // 30 s of sand, then a 2 s turn
+    const turn = flip * flip * (3 - 2 * flip)
+    const a = k % 2 === 0 ? 1 - f : f // sand in the local upper chamber; the roles swap on every turn
+    if (root.current) root.current.rotation.z = Math.PI * k + Math.PI * turn
+    if (up.current) { up.current.scale.y = Math.max(0.001, a); up.current.position.y = 0.05 + (0.1 * a) / 2 }
+    if (down.current) { down.current.scale.y = Math.max(0.001, 1 - a); down.current.position.y = -0.2 + (0.1 * (1 - a)) / 2 }
+    if (stream.current) stream.current.visible = f > 0.001 && f < 0.999 && flip === 0
+  })
   return (
-    <group>
-      {[0.02, 0.46].map(y => <mesh key={y} position-y={y}><cylinderGeometry args={[0.12, 0.12, 0.03, 20]} /><primitive object={M.wood} attach="material" /></mesh>)}
-      {[0, 2.1, 4.2].map(a => <mesh key={a} position={[Math.cos(a) * 0.1, 0.24, Math.sin(a) * 0.1]}><cylinderGeometry args={[0.008, 0.008, 0.44, 6]} /><primitive object={M.gold} attach="material" /></mesh>)}
-      <mesh position-y={0.14} rotation-x={Math.PI}><coneGeometry args={[0.085, 0.2, 18]} /><meshStandardMaterial color="#cfe8f0" transparent opacity={0.35} roughness={0.05} /></mesh>
-      <mesh position-y={0.34}><coneGeometry args={[0.085, 0.2, 18]} /><meshStandardMaterial color="#cfe8f0" transparent opacity={0.35} roughness={0.05} /></mesh>
-      <mesh position-y={0.075}><coneGeometry args={[0.06, 0.1, 14]} /><meshStandardMaterial color="#d9b878" roughness={0.9} /></mesh>
+    <group position-y={0.24}>
+      <group ref={root}>
+        {[-0.22, 0.22].map(y => <mesh key={y} position-y={y}><cylinderGeometry args={[0.12, 0.12, 0.03, 20]} /><primitive object={M.wood} attach="material" /></mesh>)}
+        {[0, 2.1, 4.2].map(a => <mesh key={a} position={[Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1]}><cylinderGeometry args={[0.008, 0.008, 0.44, 6]} /><primitive object={M.gold} attach="material" /></mesh>)}
+        <mesh position-y={-0.1} rotation-x={Math.PI}><coneGeometry args={[0.085, 0.2, 18]} /><meshStandardMaterial color="#cfe8f0" transparent opacity={0.3} roughness={0.05} depthWrite={false} /></mesh>
+        <mesh position-y={0.1}><coneGeometry args={[0.085, 0.2, 18]} /><meshStandardMaterial color="#cfe8f0" transparent opacity={0.3} roughness={0.05} depthWrite={false} /></mesh>
+        <mesh ref={up} position-y={0.1}><coneGeometry args={[0.06, 0.1, 14]} /><meshStandardMaterial color="#d9b878" roughness={0.9} /></mesh>
+        <mesh ref={down} position-y={-0.2}><coneGeometry args={[0.06, 0.1, 14]} /><meshStandardMaterial color="#d9b878" roughness={0.9} /></mesh>
+        <mesh ref={stream} position-y={-0.05}><cylinderGeometry args={[0.004, 0.004, 0.3, 6]} /><meshBasicMaterial color="#d9b878" /></mesh>
+      </group>
     </group>
   )
 }
@@ -147,22 +170,35 @@ function PrayerRug() { // "به می سجاده رنگین کن" — the first g
   return <mesh rotation-x={-Math.PI / 2} position-y={0.012}><planeGeometry args={[0.9, 1.35]} /><meshStandardMaterial map={tex} roughness={1} /></mesh>
 }
 
-function Nightingale() { // the bulbul of the Shiraz gardens
+function Nightingale() { // the bulbul of the Shiraz gardens: hops its head, flicks its tail
+  const head = useRef<THREE.Group>(null), tail = useRef<THREE.Mesh>(null)
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime, chirp = Math.max(0, Math.sin(t * 0.45) - 0.55) * 2.2 // short bursts of activity
+    if (head.current) { head.current.rotation.z = -0.1 + Math.sin(t * 9) * 0.22 * chirp; head.current.rotation.y = Math.sin(t * 0.7) * 0.5 }
+    if (tail.current) tail.current.rotation.z = Math.PI / 2 + 0.3 + Math.sin(t * 7) * 0.18 * chirp
+  })
   return (
     <group>
       <mesh position-y={0.06} scale={[1.4, 1, 1]}><sphereGeometry args={[0.05, 14, 10]} /><meshStandardMaterial color="#6b4a2c" roughness={0.9} /></mesh>
-      <mesh position={[0.08, 0.1, 0]}><sphereGeometry args={[0.032, 12, 10]} /><meshStandardMaterial color="#7a5733" roughness={0.9} /></mesh>
-      <mesh position={[0.115, 0.1, 0]} rotation={[0, 0, -Math.PI / 2]}><coneGeometry args={[0.01, 0.04, 6]} /><meshStandardMaterial color="#d9a441" /></mesh>
-      <mesh position={[-0.1, 0.07, 0]} rotation={[0, 0, Math.PI / 2 + 0.3]}><coneGeometry args={[0.025, 0.1, 6]} /><meshStandardMaterial color="#5a3d22" roughness={0.9} /></mesh>
+      <group ref={head} position={[0.06, 0.09, 0]}>
+        <mesh position={[0.02, 0.01, 0]}><sphereGeometry args={[0.032, 12, 10]} /><meshStandardMaterial color="#7a5733" roughness={0.9} /></mesh>
+        <mesh position={[0.057, 0.01, 0]} rotation={[0, 0, -Math.PI / 2]}><coneGeometry args={[0.01, 0.04, 6]} /><meshStandardMaterial color="#d9a441" /></mesh>
+        <mesh position={[0.03, 0.02, 0.022]}><sphereGeometry args={[0.005, 6, 6]} /><meshBasicMaterial color="#111" /></mesh>
+      </group>
+      <mesh ref={tail} position={[-0.1, 0.07, 0]} rotation={[0, 0, Math.PI / 2 + 0.3]}><coneGeometry args={[0.025, 0.1, 6]} /><meshStandardMaterial color="#5a3d22" roughness={0.9} /></mesh>
     </group>
   )
 }
 
-function Cypress() { // the cypress of Shiraz, the beloved's stature
+function Cypress() { // the cypress of Shiraz, the beloved's stature; sways in the draught of the candles
+  const tree = useRef<THREE.Group>(null)
+  useFrame(({ clock }) => { if (tree.current) { const t = clock.elapsedTime; tree.current.rotation.z = Math.sin(t * 0.9) * 0.018 + Math.sin(t * 2.3) * 0.006; tree.current.rotation.x = Math.sin(t * 0.7 + 1) * 0.012 } })
   return (
     <group>
       <mesh position-y={0.06}><cylinderGeometry args={[0.1, 0.07, 0.12, 16]} /><meshStandardMaterial color="#9a5a36" roughness={0.9} /></mesh>
-      {[0.3, 0.55, 0.78].map((y, i) => <mesh key={i} position-y={y}><coneGeometry args={[0.13 - i * 0.03, 0.42 - i * 0.06, 14]} /><meshStandardMaterial color="#1f4a2a" roughness={0.9} /></mesh>)}
+      <group ref={tree} position-y={0.12}>
+        {[0.18, 0.43, 0.66].map((y, i) => <mesh key={i} position-y={y}><coneGeometry args={[0.13 - i * 0.03, 0.42 - i * 0.06, 14]} /><meshStandardMaterial color="#1f4a2a" roughness={0.9} /></mesh>)}
+      </group>
     </group>
   )
 }
@@ -251,25 +287,31 @@ function OtherBooks() {
   )
 }
 
-type Item = { pos: [number, number]; rot?: number; tag: string; y: number; node: JSX.Element }
+type Item = { pos: [number, number]; rot?: number; tag: string; y: number; r: number; node: JSX.Element }
+
+// A soft dark disc under an object: cheap contact shadow that the candles' unshadowed lights can't give
+export function Blob({ r, y = 0.004, o = 0.5 }: { r: number; y?: number; o?: number }) {
+  const tex = once('blob', () => softTexture('0,0,0'))
+  return <mesh rotation-x={-Math.PI / 2} position-y={y} renderOrder={1}><planeGeometry args={[r * 2, r * 2]} /><meshBasicMaterial map={tex} transparent opacity={o} depthWrite={false} toneMapped={false} /></mesh>
+}
 const ITEMS: Item[] = [
-  { pos: [-5.8, -1.0], tag: 'دروازه قرآن · زادگاه: شیراز، حدود ۷۱۷ ه.ق', y: 0.9, node: <QuranGate /> },
-  { pos: [-5.3, 0.6], tag: 'قرآن · از حفظ بودنش تخلص «حافظ» آمد', y: 0.6, node: <Quran /> },
-  { pos: [-3.7, -0.4], tag: 'تسبیح · زهد ریایی که حافظ نقدش می‌کند', y: 0.4, node: <Tasbih /> },
-  { pos: [-5.2, 2.6], tag: 'سجاده · «به می سجاده رنگین کن» (غزل ۱)', y: 0.4, node: <PrayerRug /> },
-  { pos: [-4.2, 3.25], tag: 'سرو · سرو شیراز، قامت یار', y: 1.1, node: <Cypress /> },
-  { pos: [-3.5, 1.7], rot: 0.4, tag: 'دوات و قلم · کتابت و دیوان (گردآوری پس از مرگ او)', y: 0.5, node: <Inkwell /> },
-  { pos: [-2.6, 2.4], tag: 'ساعت شنی · گذر زمان و مرگ', y: 0.8, node: <Hourglass /> },
-  { pos: [-2.5, -2.2], tag: 'طومار · فرمان‌ها و ستایش‌های درباری', y: 0.5, node: <Scroll /> },
-  { pos: [0.4, 2.55], tag: 'نی · ناله‌ی جدایی و سماع', y: 0.4, node: <Ney /> },
-  { pos: [2.4, -2.0], tag: 'اسطرلاب · قضا و قدر و ستاره‌شناسی زمانه', y: 0.5, node: <Astrolabe /> },
-  { pos: [2.4, 2.7], tag: 'جام جم · جام جهان‌بین دل عارف', y: 0.7, node: <JamJam /> },
-  { pos: [3.2, 1.9], rot: -0.3, tag: 'صراحی و جام · می و خرابات، رندی عارفانه', y: 0.9, node: <FlaskAndCup /> },
-  { pos: [3.3, 0.1], rot: 0.3, tag: 'گل سرخ و انار · باغ‌های شیراز', y: 0.4, node: <Rose /> },
-  { pos: [4.4, 0.55], tag: 'بلبل · عاشق گل، آواز غزل', y: 0.5, node: <Nightingale /> },
-  { pos: [5.0, 1.5], tag: 'تاج · شاه‌شجاع و امیر مبارزالدین، حامیان او', y: 0.6, node: <Crown /> },
-  { pos: [5.3, 2.8], tag: 'عود · موسیقی بزم و خانقاه', y: 0.4, node: <Oud /> },
-  { pos: [5.7, -0.9], tag: 'حافظیه · آرامگاه او در شیراز، ۷۹۲ ه.ق', y: 1.2, node: <Tomb /> },
+  { pos: [-5.8, -1.0], tag: 'دروازه قرآن · زادگاه: شیراز، حدود ۷۱۷ ه.ق', y: 0.9, r: 0.6, node: <QuranGate /> },
+  { pos: [-5.3, 0.6], tag: 'قرآن · از حفظ بودنش تخلص «حافظ» آمد', y: 0.6, r: 0.45, node: <Quran /> },
+  { pos: [-3.7, -0.4], tag: 'تسبیح · زهد ریایی که حافظ نقدش می‌کند', y: 0.4, r: 0.45, node: <Tasbih /> },
+  { pos: [-5.2, 2.6], tag: 'سجاده · «به می سجاده رنگین کن» (غزل ۱)', y: 0.4, r: 0, node: <PrayerRug /> },
+  { pos: [-4.2, 3.25], tag: 'سرو · سرو شیراز، قامت یار', y: 1.1, r: 0.3, node: <Cypress /> },
+  { pos: [-3.5, 1.7], rot: 0.4, tag: 'دوات و قلم · کتابت و دیوان (گردآوری پس از مرگ او)', y: 0.5, r: 0.6, node: <Inkwell /> },
+  { pos: [-2.6, 2.4], tag: 'ساعت شنی · گذر زمان و مرگ', y: 0.8, r: 0.3, node: <Hourglass /> },
+  { pos: [-2.5, -2.2], tag: 'طومار · فرمان‌ها و ستایش‌های درباری', y: 0.5, r: 0.6, node: <Scroll /> },
+  { pos: [0.4, 2.55], tag: 'نی · ناله‌ی جدایی و سماع', y: 0.4, r: 0, node: <Ney /> },
+  { pos: [2.4, -2.0], tag: 'اسطرلاب · قضا و قدر و ستاره‌شناسی زمانه', y: 0.5, r: 0.35, node: <Astrolabe /> },
+  { pos: [2.4, 2.7], tag: 'جام جم · جام جهان‌بین دل عارف', y: 0.7, r: 0.3, node: <JamJam /> },
+  { pos: [3.2, 1.9], rot: -0.3, tag: 'صراحی و جام · می و خرابات، رندی عارفانه', y: 0.9, r: 0.6, node: <FlaskAndCup /> },
+  { pos: [3.3, 0.1], rot: 0.3, tag: 'گل سرخ و انار · باغ‌های شیراز', y: 0.4, r: 0.5, node: <Rose /> },
+  { pos: [4.4, 0.55], tag: 'بلبل · عاشق گل، آواز غزل', y: 0.5, r: 0.2, node: <Nightingale /> },
+  { pos: [5.0, 1.5], tag: 'تاج · شاه‌شجاع و امیر مبارزالدین، حامیان او', y: 0.6, r: 0.35, node: <Crown /> },
+  { pos: [5.3, 2.8], tag: 'عود · موسیقی بزم و خانقاه', y: 0.4, r: 0.5, node: <Oud /> },
+  { pos: [5.7, -0.9], tag: 'حافظیه · آرامگاه او در شیراز، ۷۹۲ ه.ق', y: 1.2, r: 0.65, node: <Tomb /> },
 ]
 
 export default function Props({ labels }: { labels: boolean }) {
@@ -280,8 +322,11 @@ export default function Props({ labels }: { labels: boolean }) {
   return (
     <group ref={root}>
       <OtherBooks key={String(fontsOk)} />
+      <group position={[-1.0, 0.052, -2.75]}><Blob r={1.0} o={0.45} /></group>
+      <group position={[1.0, 0.052, -2.85]}><Blob r={1.0} o={0.45} /></group>
       {ITEMS.map((it, i) => (
         <group key={i} position={[it.pos[0], it.pos[1] < -1.7 ? 0.05 : 0, it.pos[1]]} rotation-y={it.rot ?? 0}>
+          {it.r > 0 && <Blob r={it.r} />}
           {it.node}
           {labels && <Html position={[0, 0.02, 0.2]} center zIndexRange={[10, 0]}><div className="tag"><b>{it.tag.split(' · ')[0]}</b><span>{it.tag.split(' · ')[1]}</span></div></Html>}
         </group>

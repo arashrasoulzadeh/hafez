@@ -4,16 +4,16 @@ import { PerformanceMonitor } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { Ghazal } from './types'
-import { W, D, PIVOT_Y, MAXL, DY, clamp, ease } from './constants'
-import { makeLeafGeometry, bendLeaf } from './leaf'
+import { W, D, PIVOT_Y, MAXL, DY, clamp, ease, world } from './constants'
+import { makeLeaf, stepLeaf } from './leaf'
 import { once, poemPage, plainPage, tafsirPage, coverTexture, grainTexture, endpaperTexture, woodTexture, edgeTexture, softTexture, noiseTexture } from './textures'
 import Props from './Props'
 import Candle from './Candle'
 import Smoke from './Smoke'
 
-type Props = { pages: number; zoomOut: boolean; openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: () => void }
+type Props = { low: boolean; pages: number; zoomOut: boolean; openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: (rate?: number, gain?: number) => void }
 
-function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
+function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
   const { camera, size } = useThree()
   const root = useRef<THREE.Group>(null)
   const parts = useRef<THREE.Group[]>([])
@@ -21,6 +21,8 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
   const rightBack = useRef<THREE.Mesh>(null)
   const rightGrp = useRef<THREE.Group>(null)
   const lamp = useRef<THREE.SpotLight>(null)
+  const hemi = useRef<THREE.HemisphereLight>(null)
+  const bookBlob = useRef<THREE.Mesh>(null)
   const dust = useRef<THREE.Points>(null)
   const cover = useMemo(() => coverTexture(), [])
   const grain = useMemo(() => grainTexture(), [])
@@ -49,7 +51,8 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
   const pagesRef = useRef(pages)
   pagesRef.current = pages
   const halo = once('halo', () => softTexture('217,164,65'))
-  const leafGeo = useMemo(() => Array.from({ length: MAXL }, () => makeLeafGeometry()), [])
+  const leaves = useMemo(() => Array.from({ length: MAXL }, () => makeLeaf()), [])
+  const coverSpring = useRef({ a: 0, v: 0 }) // the front cover is a spring with a hard stop at each end
   const gl = useThree(st => st.gl), scene = useThree(st => st.scene)
   useEffect(() => {
     const pm = new THREE.PMREMGenerator(gl), env = pm.fromScene(new RoomEnvironment(), 0.04).texture
@@ -78,15 +81,21 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
     // flip: cover first, then the active leaves (the lowest `n` of the stack), staggered across the opening
     const n = pagesRef.current, FD = 0.12, ST = (0.97 - 0.18 - FD) / Math.max(1, n - 1)
     const p = [clamp(open / 0.2), ...Array.from({ length: MAXL }, (_, i) => { const j = i - (MAXL - n); return j < 0 ? 0 : clamp((open - 0.18 - j * ST) / FD) })]
-    parts.current.forEach((g, i) => {
-      if (!g) return
-      const ang = -Math.PI * ease(p[i]) * (i ? 0.998 : 1)
-      if (i === 0) g.rotation.z = ang
-      else if (p[i] !== prevP.current[i] || prevP.current[i] === undefined) bendLeaf(leafGeo[i - 1], ang, ease(p[i]), 0.025 + (MAXL - i) * DY, 0)
-      const pr = prevP.current[i] ?? 0
-      if ((pr < 0.04 && p[i] >= 0.04) || (pr > 0.96 && p[i] <= 0.96)) onFlip()
-      prevP.current[i] = p[i]
-    })
+    // the cover: a damped spring chasing the scripted angle, with a hard stop (and a small bounce + thud) at each end
+    const cv = coverSpring.current, hs = Math.min(dt, 1 / 30) / 2, target = -Math.PI * ease(p[0])
+    for (let k = 0; k < 2; k++) {
+      cv.v += (60 * (target - cv.a) - 10 * cv.v) * hs; cv.a += cv.v * hs
+      if (cv.a > 0) { if (cv.v > 0.9) onFlip(0.55, Math.min(1, cv.v / 4)); cv.a = 0; cv.v *= -0.2 }
+      else if (cv.a < -Math.PI) { if (cv.v < -0.9) onFlip(0.55, Math.min(1, -cv.v / 4)); cv.a = -Math.PI; cv.v *= -0.25 }
+    }
+    if (parts.current[0]) parts.current[0].rotation.z = cv.a
+    for (let i = 1; i <= MAXL; i++) {
+      const pi = p[i], pr = prevP.current[i] ?? 0
+      if ((pr < 0.04 && pi >= 0.04) || (pr > 0.96 && pi <= 0.96)) onFlip(0.9 + Math.random() * 0.25)
+      prevP.current[i] = pi
+      if (i <= MAXL - n) continue // unused leaf
+      stepLeaf(leaves[i - 1], -Math.PI * ease(pi) * 0.998, 0.025 + (MAXL - i) * DY, dt, t, i === MAXL && open > 0.985 ? 1 : 0)
+    }
     const o = ease(open)
     if (root.current) root.current.position.x = (1 - o) * W / 2
     if (rightBlock.current) {
@@ -97,7 +106,9 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
     if (spine.current) spine.current.scale.y = 1 - 0.82 * o
     // candle flicker + dust drift
     const fl = 1 + 0.14 * Math.sin(t * 11.3) + 0.09 * Math.sin(t * 27.1 + 1.3) + 0.06 * Math.sin(t * 47.9 + 0.4) + (Math.random() - 0.5) * 0.06
-    if (lamp.current) lamp.current.intensity = 95 * (0.94 + 0.06 * fl)
+    if (lamp.current) lamp.current.intensity = 95 * (0.94 + 0.06 * fl) * world.lit
+    if (hemi.current) hemi.current.intensity = 0.5 * (0.3 + 0.7 * world.lit)
+    if (bookBlob.current) { bookBlob.current.scale.set(W * (1 + o) + 0.5, D + 0.5, 1); bookBlob.current.position.z = 0 }
     if (dust.current) { dust.current.rotation.y = t * 0.02; dust.current.position.y = Math.sin(t * 0.3) * 0.15 }
     // responsive camera, blended continuously from the closed three-quarter view to the open top-down view
     const c0 = cur.current
@@ -106,13 +117,15 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
     const dO = portrait ? Math.max(4.2, 3.3 / aspect) : Math.max(aspect > 1.8 ? 5.1 : 6.0, 8.4 / aspect)
     const m = ease(clamp(open / 0.35))
     const lx = portrait && open > 0.5 && !zoomOut ? (page === 'poem' ? W / 2 : -W / 2) : 0
-    const zf = zoomOut ? 2.7 : 1
+    const zf = (zoomOut ? 2.7 : 1) * (1 + (1 - world.lit) * 0.4) // the camera glides in as the candles come up
     const ty = (dc * 0.62 * (1 - m) + dO * 0.93 * m) * c0.zf, tz = (dc * 0.78 * (1 - m) + dO * 0.37 * m) * c0.zf, tx = zoomOut ? 0 : lx
     const k = 1 - Math.exp(-dt * 2.5), c = cur.current
     c.zf += (zf - c.zf) * k
     c.x += (tx - c.x) * k; c.y += (ty - c.y) * k; c.z += (tz - c.z) * k; c.lx += (lx - c.lx) * k
     camera.position.set(c.x + Math.sin(t * 0.2) * 0.12, c.y, c.z)
+    camera.up.set(0, 1, 0)
     camera.lookAt(c.lx, 0.3, aspect > 1.8 && !zoomOut ? 0.35 * m : 0) // short landscape: lift the book clear of the bottom buttons
+    camera.rotateZ(Math.sin(Math.PI * clamp(open)) * 0.03 + Math.sin(t * 0.13) * 0.004) // a slight roll while the book opens
   })
 
   const leafMat = <meshStandardMaterial color="#efe3c2" roughness={0.9} />
@@ -121,11 +134,12 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
     <>
       <color attach="background" args={['#071326']} />
       <fog attach="fog" args={['#071326', 20, 48]} />
-      <hemisphereLight args={['#6f86c8', '#3a2418', 0.5]} />
+      <hemisphereLight ref={hemi} args={['#6f86c8', '#3a2418', 0.5]} />
       <directionalLight position={[-5, 4, -4]} intensity={0.45} color="#7f95e0" />
       <directionalLight position={[3, 5, 7]} intensity={0.18} color="#ffd9b0" />
-      <spotLight ref={lamp} position={[0.8, 5.6, 2.4]} angle={0.75} penumbra={1} color="#ffd2a0" intensity={95} distance={22} decay={2} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0003} shadow-radius={6} />
-      <Candle position={[3.6, 0.05, -2.3]} />
+      <spotLight ref={lamp} position={[0.8, 5.6, 2.4]} angle={0.75} penumbra={1} color="#ffd2a0" intensity={95} distance={22} decay={2} castShadow={!low} shadow-mapSize={[1024, 1024]} shadow-bias={-0.0003} shadow-radius={6} />
+      <mesh ref={bookBlob} rotation-x={-Math.PI / 2} position-y={0.006} renderOrder={1}><planeGeometry args={[1, 1]} /><meshBasicMaterial map={once('blob', () => softTexture('0,0,0'))} transparent opacity={0.6} depthWrite={false} toneMapped={false} /></mesh>
+      <Candle position={[3.6, 0.05, -2.3]} moth />
       <Candle position={[-3.4, 0.05, -3.3]} phase={2.1} height={0.45} />
 
       <mesh rotation-x={-Math.PI / 2} receiveShadow><planeGeometry args={[40, 40]} /><meshStandardMaterial map={wood} bumpMap={wood} bumpScale={0.8} roughness={0.72} /></mesh>
@@ -168,7 +182,7 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
                 {[4, 5].map(k => <meshStandardMaterial key={k} attach={`material-${k}`} color="#1a2f5c" />)}
               </mesh>
             ) : (
-              <mesh geometry={leafGeo[i - 1]} position-x={-0.01} frustumCulled={false}>
+              <mesh geometry={leaves[i - 1].geo} position-x={-0.01} frustumCulled={false}>
                 {i === MAXL ? (
                   <>
                     <meshStandardMaterial attach="material-0" map={lastFront} roughness={0.95} side={THREE.DoubleSide} />
@@ -199,12 +213,13 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
 
 const MAX_DPR = Math.min(window.devicePixelRatio, 2) // phones are 3x; 2x is crisp enough and keeps the GPU load sane
 const MIN_DPR = Math.min(window.devicePixelRatio, 1.25)
-export default function Book3D(props: Props) {
-  const [dpr, setDpr] = useState(MAX_DPR) // drops to 1 if the device can't keep up
+export default function Book3D(props: Omit<Props, 'low'>) {
+  const [dpr, setDpr] = useState(MAX_DPR) // drops (and the live shadow is switched off) if the device can't keep up
+  const [low, setLow] = useState(false)
   return (
     <Canvas shadows dpr={dpr} camera={{ fov: 40, near: 0.1, far: 60, position: [0, 3.2, 3.8] }} onCreated={({ gl }) => { gl.toneMappingExposure = 1.05 }} style={{ position: 'fixed', inset: 0, direction: 'ltr' }}>
-      <PerformanceMonitor onDecline={() => setDpr(MIN_DPR)} onIncline={() => setDpr(MAX_DPR)} />
-      <Scene {...props} />
+      <PerformanceMonitor onDecline={() => { setDpr(MIN_DPR); setLow(true) }} onIncline={() => { setDpr(MAX_DPR); setLow(false) }} />
+      <Scene {...props} low={low} />
     </Canvas>
   )
 }

@@ -50,3 +50,4 @@ html,body,#root{margin:0;height:100%;background:var(--night);color:var(--paper);
 }
 .read-hit{position:fixed;inset:9% 5% 20% 5%;z-index:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ui,.title,.mute,.zoom,.credits{z-index:2}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at 50% 46%,transparent 52%,rgba(2,5,12,.5) 100%)}
