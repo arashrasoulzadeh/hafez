@@ -230,20 +230,22 @@ function SmallBook({ title, color }: { title: string; color: string }) {
   }, [title, color])
   return (
     <group>
-      <mesh position-y={0.05} castShadow receiveShadow>
-        <boxGeometry args={[0.85, 0.1, 1.2]} />
+      <mesh position-y={0.008}><boxGeometry args={[0.85, 0.016, 1.2]} /><meshStandardMaterial color={color} roughness={0.6} /></mesh>
+      <mesh position-y={0.092}>
+        <boxGeometry args={[0.85, 0.016, 1.2]} />
         {[0, 1, 3, 4, 5].map(k => <meshStandardMaterial key={k} attach={`material-${k}`} color={color} roughness={0.6} />)}
         <meshStandardMaterial attach="material-2" map={tex} roughness={0.5} metalness={0.25} />
       </mesh>
-      <mesh position={[0.02, 0.05, 0]}><boxGeometry args={[0.8, 0.075, 1.16]} /><meshStandardMaterial color="#e6d6ae" roughness={1} /></mesh>
+      <mesh position={[-0.405, 0.05, 0]}><boxGeometry args={[0.04, 0.1, 1.2]} /><meshStandardMaterial color={color} roughness={0.55} /></mesh>
+      <mesh position={[0.02, 0.05, 0]}><boxGeometry args={[0.78, 0.068, 1.15]} /><meshStandardMaterial color="#e8dab4" roughness={1} /></mesh>
     </group>
   )
 }
 function OtherBooks() {
   return (
     <group>
-      <group position={[-1.0, 0.045, -2.75]} rotation-y={0.18}><SmallBook {...OTHER_BOOKS[0]} /><group position={[0.03, 0.1, 0.02]} rotation-y={-0.22}><SmallBook {...OTHER_BOOKS[1]} /></group></group>
-      <group position={[1.0, 0.045, -2.85]} rotation-y={-0.15}><SmallBook {...OTHER_BOOKS[2]} /><group position={[-0.02, 0.1, 0.03]} rotation-y={0.25}><SmallBook {...OTHER_BOOKS[3]} /></group></group>
+      <group position={[-1.0, 0.05, -2.75]} rotation-y={0.18}><SmallBook {...OTHER_BOOKS[0]} /><group position={[0.03, 0.1, 0.02]} rotation-y={-0.22}><SmallBook {...OTHER_BOOKS[1]} /></group></group>
+      <group position={[1.0, 0.05, -2.85]} rotation-y={-0.15}><SmallBook {...OTHER_BOOKS[2]} /><group position={[-0.02, 0.1, 0.03]} rotation-y={0.25}><SmallBook {...OTHER_BOOKS[3]} /></group></group>
     </group>
   )
 }
@@ -254,16 +256,16 @@ const ITEMS: Item[] = [
   { pos: [-5.3, 0.6], tag: 'قرآن · از حفظ بودنش تخلص «حافظ» آمد', y: 0.6, node: <Quran /> },
   { pos: [-3.7, -0.4], tag: 'تسبیح · زهد ریایی که حافظ نقدش می‌کند', y: 0.4, node: <Tasbih /> },
   { pos: [-5.2, 2.6], tag: 'سجاده · «به می سجاده رنگین کن» (غزل ۱)', y: 0.4, node: <PrayerRug /> },
-  { pos: [-4.3, 3.0], tag: 'سرو · سرو شیراز، قامت یار', y: 1.1, node: <Cypress /> },
+  { pos: [-4.2, 3.25], tag: 'سرو · سرو شیراز، قامت یار', y: 1.1, node: <Cypress /> },
   { pos: [-3.5, 1.7], rot: 0.4, tag: 'دوات و قلم · کتابت و دیوان (گردآوری پس از مرگ او)', y: 0.5, node: <Inkwell /> },
   { pos: [-2.6, 2.4], tag: 'ساعت شنی · گذر زمان و مرگ', y: 0.8, node: <Hourglass /> },
-  { pos: [-1.6, -2.0], tag: 'طومار · فرمان‌ها و ستایش‌های درباری', y: 0.5, node: <Scroll /> },
+  { pos: [-2.5, -2.2], tag: 'طومار · فرمان‌ها و ستایش‌های درباری', y: 0.5, node: <Scroll /> },
   { pos: [0.4, 2.55], tag: 'نی · ناله‌ی جدایی و سماع', y: 0.4, node: <Ney /> },
-  { pos: [2.0, -2.3], tag: 'اسطرلاب · قضا و قدر و ستاره‌شناسی زمانه', y: 0.5, node: <Astrolabe /> },
+  { pos: [2.4, -2.0], tag: 'اسطرلاب · قضا و قدر و ستاره‌شناسی زمانه', y: 0.5, node: <Astrolabe /> },
   { pos: [2.4, 2.7], tag: 'جام جم · جام جهان‌بین دل عارف', y: 0.7, node: <JamJam /> },
   { pos: [3.2, 1.9], rot: -0.3, tag: 'صراحی و جام · می و خرابات، رندی عارفانه', y: 0.9, node: <FlaskAndCup /> },
   { pos: [3.3, 0.1], rot: 0.3, tag: 'گل سرخ و انار · باغ‌های شیراز', y: 0.4, node: <Rose /> },
-  { pos: [4.05, 0.7], tag: 'بلبل · عاشق گل، آواز غزل', y: 0.5, node: <Nightingale /> },
+  { pos: [4.4, 0.55], tag: 'بلبل · عاشق گل، آواز غزل', y: 0.5, node: <Nightingale /> },
   { pos: [5.0, 1.5], tag: 'تاج · شاه‌شجاع و امیر مبارزالدین، حامیان او', y: 0.6, node: <Crown /> },
   { pos: [5.3, 2.8], tag: 'عود · موسیقی بزم و خانقاه', y: 0.4, node: <Oud /> },
   { pos: [5.7, -0.9], tag: 'حافظیه · آرامگاه او در شیراز، ۷۹۲ ه.ق', y: 1.2, node: <Tomb /> },
@@ -278,7 +280,7 @@ export default function Props({ labels }: { labels: boolean }) {
     <group ref={root}>
       <OtherBooks key={String(fontsOk)} />
       {ITEMS.map((it, i) => (
-        <group key={i} position={[it.pos[0], 0, it.pos[1]]} rotation-y={it.rot ?? 0}>
+        <group key={i} position={[it.pos[0], it.pos[1] < -1.7 ? 0.05 : 0, it.pos[1]]} rotation-y={it.rot ?? 0}>
           {it.node}
           {labels && <Html position={[0, 0.02, 0.2]} center zIndexRange={[10, 0]}><div className="tag"><b>{it.tag.split(' · ')[0]}</b><span>{it.tag.split(' · ')[1]}</span></div></Html>}
         </group>

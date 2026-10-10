@@ -30,6 +30,7 @@ export default function App() {
   const [page, setPage] = useState<'poem' | 'tafsir'>('poem')
   const [music, setMusic] = useState(false)
   const [zoomOut, setZoomOut] = useState(false)
+  const [pages, setPages] = useState(12)
   const [portrait, setPortrait] = useState(innerWidth / innerHeight < 0.9)
   const audio = useRef<HTMLAudioElement | null>(null)
   const prog = useRef({ v: 0 })
@@ -47,8 +48,9 @@ export default function App() {
   }
   const takeFal = () => {
     if (!data.length) return
-    setGhazal(data[pick(data.length, niyat)]); setPage('poem'); setStage('opening')
-    gsap.to(prog.current, { v: 1, duration: 9, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => setStage('result') })
+    const n = 8 + Math.floor(Math.random() * 13) // 8–20 pages before the fal
+    setPages(n); setGhazal(data[pick(data.length, niyat)]); setPage('poem'); setStage('opening')
+    gsap.to(prog.current, { v: 1, duration: 3.5 + n * 0.28, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => setStage('result') })
   }
   const again = () => {
     setStage('opening')
@@ -57,7 +59,7 @@ export default function App() {
 
   return (
     <>
-      <Book3D zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
+      <Book3D pages={pages} zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
       <div className="title">فال حافظ</div>
       <footer className="credits">
         <span>ساخته‌شده توسط <a href="https://github.com/arashrasoulzadeh" target="_blank" rel="noreferrer">آرش رسول‌زاده</a></span>
