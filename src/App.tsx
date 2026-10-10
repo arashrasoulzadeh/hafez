@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import Book3D from './Book3D'
-import type { Ghazal, Stage } from './types'
+import { cleanTafsir, TAFSIR_NOTE, type Ghazal, type Stage } from './types'
 
 function pick(n: number, niyat: string) {
   let h = 2166136261 ^ Date.now()
@@ -31,19 +31,21 @@ export default function App() {
   const [music, setMusic] = useState(false)
   const [zoomOut, setZoomOut] = useState(false)
   const [pages, setPages] = useState(12)
+  const [showTafsir, setShowTafsir] = useState(false)
   const [portrait, setPortrait] = useState(innerWidth / innerHeight < 0.9)
   const audio = useRef<HTMLAudioElement | null>(null)
   const prog = useRef({ v: 0 })
   const flipRef = useRef<() => void>(() => {})
 
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}ghazals.json`).then(r => r.json()).then(setData) }, [])
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowTafsir(false) }; addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [])
   useEffect(() => { const f = () => setPortrait(innerWidth / innerHeight < 0.9); addEventListener('resize', f); return () => removeEventListener('resize', f) }, [])
   useEffect(() => { const el = audio.current; if (!el) return; if (music) el.play().catch(() => {}); else el.pause() }, [music])
 
   const start = () => {
     if (!audio.current) { audio.current = new Audio(`${import.meta.env.BASE_URL}audio/sample.wav`); audio.current.loop = true; audio.current.volume = 0.5 }
     const Ctx = window.AudioContext || (window as any).webkitAudioContext
-    const ctx = new Ctx(); loadFlip(ctx).then(f => { flipRef.current = f }).catch(() => {})
+    const ctx = new Ctx(); ctx.resume().catch(() => {}); loadFlip(ctx).then(f => { flipRef.current = f }).catch(() => {})
     setStage('niyat')
   }
   const takeFal = () => {
@@ -61,6 +63,22 @@ export default function App() {
     <>
       <Book3D pages={pages} zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
       <div className="title">فال حافظ</div>
+      {showTafsir && ghazal && (
+        <div className="modal" onClick={() => setShowTafsir(false)}>
+          <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="تفسیر کامل">
+            <button className="btn small close" onClick={() => setShowTafsir(false)}>بستن</button>
+            <h2>{ghazal.title}</h2>
+            {ghazal.summary && <p className="sum">{cleanTafsir(ghazal.summary)}</p>}
+            {ghazal.couplets.map((c, i) => (
+              <section key={i}>
+                <div className="verse">{c.v.map((l, j) => <span key={j}>{l}</span>)}</div>
+                {c.s && <p>{cleanTafsir(c.s)}</p>}
+              </section>
+            ))}
+            <small>{TAFSIR_NOTE} منبع: <a href="https://ganjoor.net/hafez" target="_blank" rel="noreferrer">گنجور</a></small>
+          </div>
+        </div>
+      )}
       <footer className="credits">
         <span>ساخته‌شده توسط <a href="https://github.com/arashrasoulzadeh" target="_blank" rel="noreferrer">آرش رسول‌زاده</a></span>
         <span>با کمک <a href="https://claude.com/claude-code" target="_blank" rel="noreferrer">Claude</a></span>
@@ -76,12 +94,13 @@ export default function App() {
         {stage === 'intro' && (<><p className="hint">به نام خداوند جان و خرد</p><button className="btn" onClick={start}>آغاز</button></>)}
         {stage === 'niyat' && (<>
           <p className="hint">نیت کن، سپس فال بگیر</p>
-          <textarea className="niyat" rows={2} placeholder="نیت خود را بنویس (اختیاری)…" value={niyat} onChange={e => setNiyat(e.target.value)} />
+          <textarea className="niyat" aria-label="نیت" rows={2} placeholder="نیت خود را بنویس (اختیاری)…" value={niyat} onChange={e => setNiyat(e.target.value)} />
           <button className="btn" onClick={takeFal} disabled={!data.length}>فال بگیر</button>
         </>)}
         {stage === 'result' && (
           <div className="row pagebtns">
             {portrait && <button className="btn small" onClick={() => setPage(p => p === 'poem' ? 'tafsir' : 'poem')}>{page === 'poem' ? 'تفسیر ←' : '→ شعر'}</button>}
+            <button className="btn small" onClick={() => setShowTafsir(true)}>تفسیر کامل</button>
             <button className="btn small" onClick={again}>فال دوباره</button>
           </div>
         )}

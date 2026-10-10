@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import type { Ghazal } from './types'
+import { cleanTafsir, TAFSIR_NOTE, type Ghazal } from './types'
 import Props from './Props'
 import Candle from './Candle'
 
@@ -123,15 +123,15 @@ function poemPage(g: Ghazal | null, rotate = false, k = 1) {
     shamse(x, PW / 2, 100, 30)
     x.fillStyle = ACCENT; x.font = '36px Vazirmatn, sans-serif'; x.fillText(g.title, PW / 2, 175)
     // hemistich beside hemistich: first on the right, second on the left; font fitted to the column width
-    const COL = 390, base = 100
+    const COL = 420, base = 100
     x.font = `${base}px "Noto Nastaliq Urdu", serif`
     const widest = Math.max(1, ...rows.flatMap(cp => cp.v.map(l => x.measureText(l).width)))
-    const fs = Math.min(50, (COL / widest) * base)
-    const lh = Math.min(fs * 2.4, 1000 / Math.max(rows.length, 1))
+    const fs = Math.min(56, (COL / widest) * base)
+    const lh = Math.min(fs * 3.3, 1000 / Math.max(rows.length, 1)), top = 255 + (1000 - rows.length * lh) / 2 + lh * 0.4
     x.fillStyle = INK; x.font = `${Math.round(fs)}px "Noto Nastaliq Urdu", serif`
-    const right = PW - 100 - COL / 2, left = 100 + COL / 2
+    const right = PW - 72 - COL / 2, left = 72 + COL / 2
     rows.forEach((cp, i) => {
-      const y = 280 + i * lh
+      const y = top + i * lh
       x.fillText(cp.v[0], right, y, COL)
       if (cp.v[1]) x.fillText(cp.v[1], left, y, COL)
       x.fillStyle = ACCENT; x.beginPath(); x.arc(PW / 2, y - fs * 0.3, 3, 0, Math.PI * 2); x.fill(); x.fillStyle = INK
@@ -151,8 +151,8 @@ function tafsirPage(g: Ghazal | null) {
   if (g) {
     x.textAlign = 'right'
     const blocks: { t: string; label?: boolean }[] = []
-    if (g.summary) blocks.push({ t: g.summary })
-    g.couplets.forEach((cp, i) => { if (cp.s) { blocks.push({ t: `بیت ${i + 1}`, label: true }); blocks.push({ t: cp.s.replace(/\s+/g, ' ') }) } })
+    if (g.summary) blocks.push({ t: cleanTafsir(g.summary) })
+    g.couplets.forEach((cp, i) => { if (cp.s) { blocks.push({ t: `بیت ${i + 1}`, label: true }); blocks.push({ t: cleanTafsir(cp.s) }) } })
     const layout = (fs: number) => {
       x.font = `${fs}px Vazirmatn, sans-serif`
       const out: { t: string; label?: boolean }[] = []
@@ -175,6 +175,7 @@ function tafsirPage(g: Ghazal | null) {
       x.fillText(r.t, PW - 90, y); y += fs * 1.75
     }
   }
+  if (g) { x.textAlign = 'center'; x.fillStyle = ACCENT; x.globalAlpha = 0.8; x.font = '24px Vazirmatn, sans-serif'; x.fillText(TAFSIR_NOTE, PW / 2, PH - 84, 860); x.globalAlpha = 1 }
   return finish(c, false)
 }
 
@@ -297,6 +298,11 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
   const lastFront = useMemo(() => poemPage(data.length ? data[Math.floor(Math.random() * data.length)] : null), [data, fontsOk, seed])
   const finalPoem = useMemo(() => poemPage(ghazal), [ghazal, fontsOk])
   const finalTafsir = useMemo(() => tafsirPage(ghazal), [ghazal, fontsOk])
+  useEffect(() => () => { pool.forEach(t => t.dispose()) }, [pool])
+  useEffect(() => () => { poolMats.forEach(m => m.dispose()) }, [poolMats])
+  useEffect(() => () => { lastFront.dispose() }, [lastFront])
+  useEffect(() => () => { finalPoem.dispose() }, [finalPoem])
+  useEffect(() => () => { finalTafsir.dispose() }, [finalTafsir])
   const prevP = useRef<number[]>([])
   const pagesRef = useRef(pages)
   pagesRef.current = pages
@@ -354,9 +360,9 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
     const c0 = cur.current
     const aspect = size.width / size.height, portrait = aspect < 0.9
     const dc = Math.max(5.2, 4.2 / aspect)
-    const dO = portrait ? Math.max(5.2, 4.4 / aspect) : Math.max(5.2, 8.4 / aspect)
+    const dO = portrait ? Math.max(4.2, 3.3 / aspect) : Math.max(5.2, 8.4 / aspect)
     const m = ease(clamp(open / 0.35))
-    const lx = portrait && open > 0.5 ? (page === 'poem' ? W / 2 : -W / 2) : 0
+    const lx = portrait && open > 0.5 && !zoomOut ? (page === 'poem' ? W / 2 : -W / 2) : 0
     const zf = zoomOut ? 2.7 : 1
     const ty = (dc * 0.62 * (1 - m) + dO * 0.93 * m) * c0.zf, tz = (dc * 0.78 * (1 - m) + dO * 0.37 * m) * c0.zf, tx = zoomOut ? 0 : lx
     const k = 1 - Math.exp(-dt * 2.5), c = cur.current
@@ -375,7 +381,7 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
       <hemisphereLight args={['#6f86c8', '#3a2418', 0.5]} />
       <directionalLight position={[-5, 4, -4]} intensity={0.45} color="#7f95e0" />
       <directionalLight position={[3, 5, 7]} intensity={0.18} color="#ffd9b0" />
-      <spotLight ref={lamp} position={[0.8, 5.6, 2.4]} angle={0.75} penumbra={1} color="#ffd2a0" intensity={95} distance={22} decay={2} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0003} shadow-radius={6} />
+      <spotLight ref={lamp} position={[0.8, 5.6, 2.4]} angle={0.75} penumbra={1} color="#ffd2a0" intensity={95} distance={22} decay={2} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0003} shadow-radius={6} />
       <Candle position={[3.6, 0.05, -2.3]} />
       <Candle position={[-3.4, 0.05, -3.3]} phase={2.1} height={0.45} />
 
@@ -450,7 +456,7 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
 
 export default function Book3D(props: Props) {
   return (
-    <Canvas shadows dpr={[1, 1.75]} camera={{ fov: 40, near: 0.1, far: 60, position: [0, 3.2, 3.8] }} onCreated={({ gl }) => { gl.toneMappingExposure = 1.05 }} style={{ position: 'fixed', inset: 0, direction: 'ltr' }}>
+    <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 40, near: 0.1, far: 60, position: [0, 3.2, 3.8] }} onCreated={({ gl }) => { gl.toneMappingExposure = 1.05 }} style={{ position: 'fixed', inset: 0, direction: 'ltr' }}>
       <Scene {...props} />
     </Canvas>
   )
