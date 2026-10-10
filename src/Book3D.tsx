@@ -15,6 +15,9 @@ function coverTexture() {
   g.lineWidth = 2; g.strokeRect(40, 40, 432, 636)
   g.beginPath(); g.ellipse(256, 358, 150, 210, 0, 0, Math.PI * 2); g.lineWidth = 4; g.stroke()
   g.beginPath(); g.ellipse(256, 358, 128, 186, 0, 0, Math.PI * 2); g.lineWidth = 2; g.stroke()
+  g.save(); g.translate(256, 358); g.strokeStyle = 'rgba(217,164,65,0.4)'; g.lineWidth = 2
+  for (let r = 0; r < 2; r++) { g.rotate(Math.PI / 8 * r); g.beginPath(); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 - Math.PI / 2; g.lineTo(Math.cos(a) * 125, Math.sin(a) * 175); const b2 = a + Math.PI / 8; g.lineTo(Math.cos(b2) * 62, Math.sin(b2) * 88) } g.closePath(); g.stroke() }
+  g.restore()
   for (let i = 0; i < 16; i++) { // ornament petals around the medallion
     const a = (i / 16) * Math.PI * 2
     g.beginPath(); g.arc(256 + Math.cos(a) * 170, 358 + Math.sin(a) * 230, 7, 0, Math.PI * 2); g.fillStyle = '#d9a441'; g.fill()
@@ -38,8 +41,15 @@ function paper(k = 1) {
   x.scale(k, k)
   x.fillStyle = PAPER; x.fillRect(0, 0, PW, PH)
   for (let i = 0; i < 2500; i++) { x.fillStyle = `rgba(120,90,40,${Math.random() * 0.05})`; x.fillRect(Math.random() * PW, Math.random() * PH, 3, 3) }
+  x.strokeStyle = 'rgba(133,79,11,0.55)'; x.lineWidth = 3; x.strokeRect(46, 46, PW - 92, PH - 92)
+  x.lineWidth = 1.5; x.strokeRect(58, 58, PW - 116, PH - 116)
   x.direction = 'rtl'; x.textAlign = 'center'
   return { c, x }
+}
+function shamse(x: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  x.save(); x.translate(cx, cy); x.strokeStyle = ACCENT; x.fillStyle = ACCENT; x.lineWidth = 2
+  for (let i = 0; i < 8; i++) { x.rotate(Math.PI / 4); x.beginPath(); x.ellipse(0, -r * 0.62, r * 0.2, r * 0.38, 0, 0, Math.PI * 2); x.stroke() }
+  x.beginPath(); x.arc(0, 0, r * 0.2, 0, Math.PI * 2); x.fill(); x.restore()
 }
 function finish(c: HTMLCanvasElement, rotate: boolean) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
@@ -49,12 +59,23 @@ function finish(c: HTMLCanvasElement, rotate: boolean) {
 function poemPage(g: Ghazal | null, rotate = false, k = 1) {
   const { c, x } = paper(k)
   if (g) {
-    const lines = g.couplets.slice(0, 14).flatMap(cp => cp.v)
-    const lh = Math.min(70, 1040 / (Math.max(lines.length, 1) * 1.09))
-    x.fillStyle = ACCENT; x.font = '38px Vazirmatn, sans-serif'; x.fillText(g.title, PW / 2, 110)
-    x.fillStyle = INK; x.font = `${Math.round(lh * 0.52)}px "Noto Nastaliq Urdu", serif`
-    let y = 240
-    lines.forEach((l, i) => { x.fillText(l, PW / 2, y, 780); y += lh + (i % 2 ? lh * 0.18 : 0) })
+    const rows = g.couplets.slice(0, 16)
+    shamse(x, PW / 2, 100, 30)
+    x.fillStyle = ACCENT; x.font = '36px Vazirmatn, sans-serif'; x.fillText(g.title, PW / 2, 175)
+    // hemistich beside hemistich: first on the right, second on the left; font fitted to the column width
+    const COL = 390, base = 100
+    x.font = `${base}px "Noto Nastaliq Urdu", serif`
+    const widest = Math.max(1, ...rows.flatMap(cp => cp.v.map(l => x.measureText(l).width)))
+    const fs = Math.min(50, (COL / widest) * base)
+    const lh = Math.min(fs * 2.4, 1000 / Math.max(rows.length, 1))
+    x.fillStyle = INK; x.font = `${Math.round(fs)}px "Noto Nastaliq Urdu", serif`
+    const right = PW - 100 - COL / 2, left = 100 + COL / 2
+    rows.forEach((cp, i) => {
+      const y = 280 + i * lh
+      x.fillText(cp.v[0], right, y, COL)
+      if (cp.v[1]) x.fillText(cp.v[1], left, y, COL)
+      x.fillStyle = ACCENT; x.beginPath(); x.arc(PW / 2, y - fs * 0.3, 3, 0, Math.PI * 2); x.fill(); x.fillStyle = INK
+    })
   }
   return finish(c, rotate)
 }
@@ -77,11 +98,11 @@ function tafsirPage(g: Ghazal | null) {
       return out
     }
     let fs = 36, rows = layout(fs)
-    while (rows.length * fs * 1.75 > 1180 && fs > 22) { fs -= 2; rows = layout(fs) }
-    const maxRows = Math.floor(1180 / (fs * 1.75))
+    while (rows.length * fs * 1.75 > 1060 && fs > 22) { fs -= 2; rows = layout(fs) }
+    const maxRows = Math.floor(1060 / (fs * 1.75))
     if (rows.length > maxRows) { rows = rows.slice(0, maxRows); rows[maxRows - 1] = { t: rows[maxRows - 1].t + ' …' } }
-    x.textAlign = 'center'; x.fillStyle = ACCENT; x.font = '38px Vazirmatn, sans-serif'; x.fillText('تفسیر', PW / 2, 110)
-    x.textAlign = 'right'; let y = 200
+    x.textAlign = 'center'; shamse(x, PW / 2, 100, 30); x.fillStyle = ACCENT; x.font = '36px Vazirmatn, sans-serif'; x.fillText('تفسیر', PW / 2, 175)
+    x.textAlign = 'right'; let y = 260
     for (const r of rows) {
       x.fillStyle = r.label ? ACCENT : INK; x.font = `${r.label ? fs - 4 : fs}px Vazirmatn, sans-serif`
       x.fillText(r.t, PW - 90, y); y += fs * 1.75
@@ -112,6 +133,38 @@ function edgeTexture() { // stacked page edges
   return t
 }
 
+function softTexture(rgb: string) {
+  const c = document.createElement('canvas'); c.width = c.height = 128
+  const x = c.getContext('2d')!, g = x.createRadialGradient(64, 64, 0, 64, 64, 64)
+  g.addColorStop(0, `rgba(${rgb},1)`); g.addColorStop(0.45, `rgba(${rgb},0.35)`); g.addColorStop(1, `rgba(${rgb},0)`)
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128)
+  return new THREE.CanvasTexture(c)
+}
+
+// incense smoke curling up from the burner
+function Smoke({ position }: { position: [number, number, number] }) {
+  const tex = useMemo(() => softTexture('200,212,240'), [])
+  const refs = useRef<(THREE.Sprite | null)[]>([])
+  const seeds = useMemo(() => Array.from({ length: 16 }, (_, i) => ({ ph: i / 16, a: Math.random() * 6.28, sp: 0.8 + Math.random() * 0.6 })), [])
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime
+    seeds.forEach((sd, i) => {
+      const sp = refs.current[i]; if (!sp) return
+      const life = (t * 0.07 * sd.sp + sd.ph) % 1
+      sp.position.set(Math.sin(life * 9 + sd.a) * 0.18 * life * 3, 0.15 + life * 3, Math.cos(life * 7 + sd.a) * 0.12 * life * 3)
+      const sc = 0.25 + life * 1.3; sp.scale.set(sc, sc, 1)
+      ;(sp.material as THREE.SpriteMaterial).opacity = Math.sin(Math.PI * life) * 0.2
+    })
+  })
+  return (
+    <group position={position}>
+      <mesh position-y={0.05}><cylinderGeometry args={[0.16, 0.1, 0.1, 20]} /><meshStandardMaterial color="#b08d3a" metalness={0.7} roughness={0.35} /></mesh>
+      <mesh position-y={0.16}><sphereGeometry args={[0.018, 8, 8]} /><meshBasicMaterial color="#ff6a3a" /></mesh>
+      {seeds.map((_, i) => <sprite key={i} ref={el => { refs.current[i] = el }}><spriteMaterial map={tex} transparent depthWrite={false} opacity={0} color="#c8d4f0" /></sprite>)}
+    </group>
+  )
+}
+
 const LEAVES = 6
 type Props = { openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: () => void }
 
@@ -137,6 +190,7 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
   const finalPoem = useMemo(() => poemPage(ghazal, true), [ghazal, fontsOk])
   const finalTafsir = useMemo(() => tafsirPage(ghazal), [ghazal, fontsOk])
   const prevP = useRef<number[]>([])
+  const halo = useMemo(() => softTexture('217,164,65'), [])
   const wood = useMemo(() => woodTexture(), [])
   const edge = useMemo(() => edgeTexture(), [])
   const spine = useRef<THREE.Group>(null)
@@ -192,8 +246,8 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
   const pageBlockMat = <meshStandardMaterial color="#e6d6ae" roughness={1} />
   return (
     <>
-      <color attach="background" args={['#0b1020']} />
-      <fog attach="fog" args={['#0b1020', 8, 18]} />
+      <color attach="background" args={['#071326']} />
+      <fog attach="fog" args={['#071326', 9, 20]} />
       <ambientLight intensity={0.5} color="#8aa0d8" />
       <pointLight position={[0.4, 3.2, 0.8]} color="#ffb45a" intensity={8} distance={14} decay={1.6} castShadow />
       <group position={[3.6, 0, -2.3]}>
@@ -209,6 +263,9 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
           <planeGeometry args={[1.25, 1.75]} /><meshStandardMaterial map={sh.tex} roughness={0.95} />
         </mesh>
       ))}
+
+      <mesh rotation-x={-Math.PI / 2} position-y={0.05}><planeGeometry args={[11, 11]} /><meshBasicMaterial map={halo} transparent opacity={0.28} blending={THREE.AdditiveBlending} depthWrite={false} /></mesh>
+      <Smoke position={[-3.5, 0, -2.0]} />
 
       <group ref={root}>
         <mesh position={[-W / 2, 0.02, 0]} castShadow><boxGeometry args={[W, 0.04, D]} /><meshStandardMaterial color="#1a2f5c" roughness={0.6} /></mesh>

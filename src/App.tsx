@@ -10,29 +10,13 @@ function pick(n: number, niyat: string) {
   return Math.abs(h) % n
 }
 
-// Synthesised page turn: lift rustle -> swish through the air -> soft slap when the leaf lands
-function makeFlip(ctx: AudioContext) {
-  const noise = (secs: number, shape: (i: number, n: number) => number) => {
-    const n = Math.floor(ctx.sampleRate * secs), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0)
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * shape(i, n)
-    return buf
-  }
-  const play = (buf: AudioBuffer, t0: number, type: BiquadFilterType, f0: number, f1: number, q: number, gain: number) => {
-    const src = ctx.createBufferSource(); src.buffer = buf
-    const f = ctx.createBiquadFilter(); f.type = type; f.Q.value = q
-    f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(f1, t0 + buf.duration)
-    const g = ctx.createGain(); g.gain.value = gain
-    src.connect(f).connect(g).connect(ctx.destination); src.start(t0)
-  }
-  const bell = (x: number, peak: number) => Math.exp(-Math.pow((x - peak) / 0.28, 2))
+// Real page-turn recording (public/audio/flip.mp3), decoded once and replayed with a little pitch variation
+async function loadFlip(ctx: AudioContext) {
+  const buf = await ctx.decodeAudioData(await (await fetch(`${import.meta.env.BASE_URL}audio/flip.mp3`)).arrayBuffer())
   return () => {
-    const t = ctx.currentTime, v = 0.85 + Math.random() * 0.3
-    // paper fibres rustling as the page lifts: sparse crackles
-    play(noise(1.0, (i, n) => bell(i / n, 0.3) * (Math.random() < 0.06 ? 1 : 0.12)), t, 'highpass', 2200 * v, 3200 * v, 0.7, 0.8)
-    // air swish as it sweeps over
-    play(noise(0.9, (i, n) => bell(i / n, 0.45) * 0.7), t + 0.05, 'bandpass', 1400 * v, 3800 * v, 0.8, 0.55)
-    // soft slap on landing
-    play(noise(0.14, (i, n) => Math.pow(1 - i / n, 2.5)), t + 0.95, 'lowpass', 900, 300, 0.7, 0.9)
+    const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = 0.92 + Math.random() * 0.16
+    const g = ctx.createGain(); g.gain.value = 0.9
+    src.connect(g).connect(ctx.destination); src.start()
   }
 }
 
@@ -50,14 +34,14 @@ export default function App() {
   const prog = useRef({ v: 0 })
   const flipRef = useRef<() => void>(() => {})
 
-  useEffect(() => { fetch('/ghazals.json').then(r => r.json()).then(setData) }, [])
+  useEffect(() => { fetch(`${import.meta.env.BASE_URL}ghazals.json`).then(r => r.json()).then(setData) }, [])
   useEffect(() => { const f = () => setPortrait(innerWidth / innerHeight < 0.9); addEventListener('resize', f); return () => removeEventListener('resize', f) }, [])
   useEffect(() => { const el = audio.current; if (!el) return; if (music) el.play().catch(() => {}); else el.pause() }, [music])
 
   const start = () => {
-    if (!audio.current) { audio.current = new Audio('/audio/sample.wav'); audio.current.loop = true; audio.current.volume = 0.5 }
+    if (!audio.current) { audio.current = new Audio(`${import.meta.env.BASE_URL}audio/sample.wav`); audio.current.loop = true; audio.current.volume = 0.5 }
     const Ctx = window.AudioContext || (window as any).webkitAudioContext
-    const ctx = new Ctx(); const f = makeFlip(ctx); flipRef.current = f
+    const ctx = new Ctx(); loadFlip(ctx).then(f => { flipRef.current = f }).catch(() => {})
     setStage('niyat')
   }
   const takeFal = () => {
@@ -74,6 +58,11 @@ export default function App() {
     <>
       <Book3D openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
       <div className="title">فال حافظ</div>
+      <footer className="credits">
+        <span>ساخته‌شده توسط <a href="https://github.com/arashrasoulzadeh" target="_blank" rel="noreferrer">آرش رسول‌زاده</a></span>
+        <span>با کمک <a href="https://claude.com/claude-code" target="_blank" rel="noreferrer">Claude</a></span>
+        <span>متن غزل‌ها و تفسیر: <a href="https://ganjoor.net/hafez" target="_blank" rel="noreferrer">گنجور</a></span>
+      </footer>
       {stage !== 'intro' && <button className="btn small mute" onClick={() => setMusic(m => !m)}>{music ? 'موسیقی: روشن' : 'موسیقی: خاموش'}</button>}
       <div className="ui">
         {stage === 'intro' && (<><p className="hint">به نام خداوند جان و خرد</p><button className="btn" onClick={start}>آغاز</button></>)}
