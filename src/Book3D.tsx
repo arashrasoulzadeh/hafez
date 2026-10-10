@@ -202,14 +202,15 @@ function bendLeaf(g: THREE.BufferGeometry, hingeAngle: number, p: number, y0: nu
 }
 
 const LEAVES = 6
-type Props = { openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: () => void }
+type Props = { zoomOut: boolean; openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: () => void }
 
-function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
+function Scene({ zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
   const { camera, size } = useThree()
   const root = useRef<THREE.Group>(null)
   const parts = useRef<THREE.Group[]>([])
   const rightBlock = useRef<THREE.Mesh>(null)
   const rightBack = useRef<THREE.Mesh>(null)
+  const rightGrp = useRef<THREE.Group>(null)
   const flame = useRef<THREE.PointLight>(null)
   const lamp = useRef<THREE.PointLight>(null)
   const dust = useRef<THREE.Points>(null)
@@ -243,7 +244,7 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3)); return g
   }, [])
 
-  const cur = useRef({ x: 0, y: 3.2, z: 3.8, lx: 0 })
+  const cur = useRef({ x: 0, y: 3.2, z: 3.8, lx: 0, zf: 1 })
   useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime
     const open = openRef.current
@@ -261,8 +262,7 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
     const o = ease(open)
     if (root.current) root.current.position.x = (1 - o) * W / 2
     if (rightBlock.current) { rightBlock.current.scale.y = Math.max(0.001, o); rightBlock.current.position.y = 0.04 + 0.13 * o }
-    if (rightBack.current) rightBack.current.visible = open > 0.02
-    if (rightBlock.current) rightBlock.current.visible = open > 0.02
+    if (rightGrp.current) { const a0 = parts.current[0]?.rotation.z ?? 0; rightGrp.current.scale.x = a0 < -Math.PI / 2 ? Math.max(0.0001, -Math.cos(a0)) : 0.0001 }
     if (spine.current) spine.current.scale.y = 1 - 0.82 * o
     // candle flicker + dust drift
     const fl = 1 + 0.14 * Math.sin(t * 11.3) + 0.09 * Math.sin(t * 27.1 + 1.3) + 0.06 * Math.sin(t * 47.9 + 0.4) + (Math.random() - 0.5) * 0.06
@@ -270,13 +270,16 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
     if (lamp.current) lamp.current.intensity = 10 * (0.9 + 0.1 * fl)
     if (dust.current) { dust.current.rotation.y = t * 0.02; dust.current.position.y = Math.sin(t * 0.3) * 0.15 }
     // responsive camera, blended continuously from the closed three-quarter view to the open top-down view
+    const c0 = cur.current
     const aspect = size.width / size.height, portrait = aspect < 0.9
     const dc = Math.max(5.2, 4.2 / aspect)
     const dO = portrait ? Math.max(5.2, 4.4 / aspect) : Math.max(5.2, 8.4 / aspect)
     const m = ease(clamp(open / 0.35))
     const lx = portrait && open > 0.5 ? (page === 'poem' ? W / 2 : -W / 2) : 0
-    const ty = dc * 0.62 * (1 - m) + dO * 0.93 * m, tz = dc * 0.78 * (1 - m) + dO * 0.37 * m, tx = lx
+    const zf = zoomOut ? 2.7 : 1
+    const ty = (dc * 0.62 * (1 - m) + dO * 0.93 * m) * c0.zf, tz = (dc * 0.78 * (1 - m) + dO * 0.37 * m) * c0.zf, tx = zoomOut ? 0 : lx
     const k = 1 - Math.exp(-dt * 2.5), c = cur.current
+    c.zf += (zf - c.zf) * k
     c.x += (tx - c.x) * k; c.y += (ty - c.y) * k; c.z += (tz - c.z) * k; c.lx += (lx - c.lx) * k
     camera.position.set(c.x + Math.sin(t * 0.2) * 0.12, c.y, c.z)
     camera.lookAt(c.lx, 0.3, 0)
@@ -287,7 +290,7 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
   return (
     <>
       <color attach="background" args={['#071326']} />
-      <fog attach="fog" args={['#071326', 9, 20]} />
+      <fog attach="fog" args={['#071326', 20, 48]} />
       <ambientLight intensity={0.6} color="#8aa0d8" />
       <pointLight ref={lamp} position={[0.4, 3.2, 0.8]} color="#ffb45a" intensity={10} distance={14} decay={1.6} castShadow />
       <group position={[3.6, 0, -2.3]}>
@@ -305,7 +308,7 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
       ))}
 
       <mesh rotation-x={-Math.PI / 2} position-y={0.05}><planeGeometry args={[11, 11]} /><meshBasicMaterial map={halo} transparent opacity={0.28} blending={THREE.AdditiveBlending} depthWrite={false} /></mesh>
-      <Props />
+      <Props labels={zoomOut} />
       <Smoke position={[-3.5, 0, -2.0]} />
 
       <group ref={root}>
@@ -321,8 +324,10 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
         </group>
         <mesh position={[-0.2, 0.455, D / 2 + 0.05]}><boxGeometry args={[0.07, 0.004, 0.55]} /><meshStandardMaterial color="#8b1d2c" roughness={0.7} /></mesh>
 
-        <mesh ref={rightBack} position={[W / 2, 0.02, 0]} visible={false}><boxGeometry args={[W, 0.04, D]} /><meshStandardMaterial color="#1a2f5c" roughness={0.6} /></mesh>
+        <group ref={rightGrp} scale-x={0.0001}>
+        <mesh ref={rightBack} position={[W / 2, 0.02, 0]}><boxGeometry args={[W, 0.04, D]} /><meshStandardMaterial color="#1a2f5c" roughness={0.6} /></mesh>
         <mesh ref={rightBlock} position={[W / 2, 0.04, 0]} scale-y={0.001}><boxGeometry args={[W - 0.06, 0.26, D - 0.08]} />{pageBlockMat}</mesh>
+        </group>
 
         {Array.from({ length: LEAVES + 1 }, (_, i) => i).map(i => (
           <group key={i} ref={el => { if (el) parts.current[i] = el }} position={[0, PIVOT_Y, 0]}>

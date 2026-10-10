@@ -29,6 +29,7 @@ export default function App() {
   const [seed, setSeed] = useState(0)
   const [page, setPage] = useState<'poem' | 'tafsir'>('poem')
   const [music, setMusic] = useState(false)
+  const [zoomOut, setZoomOut] = useState(false)
   const [portrait, setPortrait] = useState(innerWidth / innerHeight < 0.9)
   const audio = useRef<HTMLAudioElement | null>(null)
   const prog = useRef({ v: 0 })
@@ -56,7 +57,7 @@ export default function App() {
 
   return (
     <>
-      <Book3D openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
+      <Book3D zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
       <div className="title">فال حافظ</div>
       <footer className="credits">
         <span>ساخته‌شده توسط <a href="https://github.com/arashrasoulzadeh" target="_blank" rel="noreferrer">آرش رسول‌زاده</a></span>
@@ -64,6 +65,11 @@ export default function App() {
         <span>متن غزل‌ها و تفسیر: <a href="https://ganjoor.net/hafez" target="_blank" rel="noreferrer">گنجور</a></span>
       </footer>
       {stage !== 'intro' && <button className="btn small mute" onClick={() => setMusic(m => !m)}>{music ? 'موسیقی: روشن' : 'موسیقی: خاموش'}</button>}
+      {stage !== 'intro' && (
+        <button className="btn small zoom" onClick={() => setZoomOut(z => !z)} aria-label={zoomOut ? 'نزدیک‌تر' : 'نمای کلی میز'} title={zoomOut ? 'نزدیک‌تر' : 'نمای کلی میز'}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M20 20l-4.8-4.8M7.5 10.5h6" />{!zoomOut && null}{zoomOut && <path d="M10.5 7.5v6" />}</svg>
+        </button>
+      )}
       <div className="ui">
         {stage === 'intro' && (<><p className="hint">به نام خداوند جان و خرد</p><button className="btn" onClick={start}>آغاز</button></>)}
         {stage === 'niyat' && (<>
