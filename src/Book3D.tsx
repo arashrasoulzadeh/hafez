@@ -360,7 +360,7 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
     const c0 = cur.current
     const aspect = size.width / size.height, portrait = aspect < 0.9
     const dc = Math.max(5.2, 4.2 / aspect)
-    const dO = portrait ? Math.max(4.2, 3.3 / aspect) : Math.max(5.2, 8.4 / aspect)
+    const dO = portrait ? Math.max(4.2, 3.3 / aspect) : Math.max(aspect > 1.8 ? 5.1 : 5.2, 8.4 / aspect)
     const m = ease(clamp(open / 0.35))
     const lx = portrait && open > 0.5 && !zoomOut ? (page === 'poem' ? W / 2 : -W / 2) : 0
     const zf = zoomOut ? 2.7 : 1
@@ -369,7 +369,7 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
     c.zf += (zf - c.zf) * k
     c.x += (tx - c.x) * k; c.y += (ty - c.y) * k; c.z += (tz - c.z) * k; c.lx += (lx - c.lx) * k
     camera.position.set(c.x + Math.sin(t * 0.2) * 0.12, c.y, c.z)
-    camera.lookAt(c.lx, 0.3, 0)
+    camera.lookAt(c.lx, 0.3, aspect > 1.8 && !zoomOut ? 0.35 * m : 0) // short landscape: lift the book clear of the bottom buttons
   })
 
   const leafMat = <meshStandardMaterial color="#efe3c2" roughness={0.9} />

@@ -3,6 +3,9 @@ import gsap from 'gsap'
 import Book3D from './Book3D'
 import { cleanTafsir, TAFSIR_NOTE, type Ghazal, type Stage } from './types'
 
+// On slow devices keep real-time pacing instead of letting gsap stretch the animation frame by frame
+gsap.ticker.lagSmoothing(0)
+
 function pick(n: number, niyat: string) {
   let h = 2166136261 ^ Date.now()
   for (const ch of niyat) h = Math.imul(h ^ ch.charCodeAt(0), 16777619)
