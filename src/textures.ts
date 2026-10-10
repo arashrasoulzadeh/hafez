@@ -1,8 +1,7 @@
 import * as THREE from 'three'
 import { cleanTafsir, TAFSIR_NOTE, type Ghazal } from './types'
 
-// Small screens get smaller page and cover canvases (less RAM and GPU memory; the page never fills more than ~700 device pixels there)
-export const QUALITY = Math.min(window.innerWidth, window.innerHeight) < 700 ? 0.75 : 1
+export const QUALITY = 1 // full-size page and cover canvases on every device: phones need the sharpness most
 
 // Textures shared by many objects are built once
 const cache = new Map<string, THREE.Texture>()

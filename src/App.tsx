@@ -41,7 +41,25 @@ export default function App() {
   const flipRef = useRef<() => void>(() => {})
 
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}ghazals.json`).then(r => r.json()).then(setData) }, [])
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowTafsir(false) }; addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [])
+  // Back button: the open book and every overlay push a history entry, so the browser / Android back button peels them off one by one
+  const layers = useRef<{ id: string; close: () => void }[]>([])
+  const resultDepth = useRef(0)
+  const topId = () => layers.current[layers.current.length - 1]?.id
+  const openLayer = (id: string, close: () => void) => { layers.current.push({ id, close }); history.pushState({ d: layers.current.length }, '') }
+  const unwind = (to = layers.current.length - 1) => { const n = layers.current.length - Math.max(0, to); if (n > 0) history.go(-n) }
+  useEffect(() => {
+    history.replaceState({ d: 0 }, '')
+    const pop = (e: PopStateEvent) => { const d = e.state?.d ?? 0; while (layers.current.length > d) layers.current.pop()?.close() }
+    addEventListener('popstate', pop)
+    return () => removeEventListener('popstate', pop)
+  }, [])
+  const openTafsir = () => { if (topId() === 'read') return; openLayer('read', () => setShowTafsir(false)); setShowTafsir(true) }
+  const toggleZoom = () => {
+    if (!zoomOut) { openLayer('zoom', () => setZoomOut(false)); setZoomOut(true) }
+    else if (topId() === 'zoom') unwind()
+    else setZoomOut(false)
+  }
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && topId() === 'read') unwind() }; addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [])
   useEffect(() => { const f = () => setPortrait(innerWidth / innerHeight < 0.9); addEventListener('resize', f); return () => removeEventListener('resize', f) }, [])
   useEffect(() => { const el = audio.current; if (!el) return; if (music) el.play().catch(() => {}); else el.pause() }, [music])
 
@@ -55,7 +73,7 @@ export default function App() {
     if (!data.length) return
     const n = 8 + Math.floor(Math.random() * 13) // 8–20 pages before the fal
     setPages(n); setGhazal(data[pick(data.length, niyat)]); setPage('poem'); setStage('opening')
-    gsap.to(prog.current, { v: 1, duration: 3.5 + n * 0.28, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => setStage('result') })
+    gsap.to(prog.current, { v: 1, duration: 3.5 + n * 0.28, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => { setStage('result'); openLayer('result', again); resultDepth.current = layers.current.length } })
   }
   const again = () => {
     setStage('opening')
@@ -65,11 +83,12 @@ export default function App() {
   return (
     <>
       <Book3D pages={pages} zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={() => flipRef.current()} />
+      {stage === 'result' && !showTafsir && !zoomOut && <div className="read-hit" onClick={openTafsir} aria-hidden />}
       <div className="title">فال حافظ</div>
       {showTafsir && ghazal && (
-        <div className="modal" onClick={() => setShowTafsir(false)}>
+        <div className="modal" onClick={() => unwind()}>
           <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="تفسیر کامل">
-            <button className="btn small close" onClick={() => setShowTafsir(false)}>بستن</button>
+            <button className="btn small close" onClick={() => unwind()}>بستن</button>
             <h2>{ghazal.title}</h2>
             {ghazal.summary && <p className="sum">{cleanTafsir(ghazal.summary)}</p>}
             {ghazal.couplets.map((c, i) => (
@@ -89,7 +108,7 @@ export default function App() {
       </footer>
       {stage !== 'intro' && <button className="btn small mute" onClick={() => setMusic(m => !m)}>{music ? 'موسیقی: روشن' : 'موسیقی: خاموش'}</button>}
       {stage !== 'intro' && (
-        <button className="btn small zoom" onClick={() => setZoomOut(z => !z)} aria-label={zoomOut ? 'نزدیک‌تر' : 'نمای کلی میز'} title={zoomOut ? 'نزدیک‌تر' : 'نمای کلی میز'}>
+        <button className="btn small zoom" onClick={toggleZoom} aria-label={zoomOut ? 'نزدیک‌تر' : 'نمای کلی میز'} title={zoomOut ? 'نزدیک‌تر' : 'نمای کلی میز'}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M20 20l-4.8-4.8M7.5 10.5h6" />{!zoomOut && null}{zoomOut && <path d="M10.5 7.5v6" />}</svg>
         </button>
       )}
@@ -103,8 +122,8 @@ export default function App() {
         {stage === 'result' && (
           <div className="row pagebtns">
             {portrait && <button className="btn small" onClick={() => setPage(p => p === 'poem' ? 'tafsir' : 'poem')}>{page === 'poem' ? 'تفسیر ←' : '→ شعر'}</button>}
-            <button className="btn small" onClick={() => setShowTafsir(true)}>تفسیر کامل</button>
-            <button className="btn small" onClick={again}>فال دوباره</button>
+            <button className="btn small" onClick={openTafsir}>تفسیر کامل</button>
+            <button className="btn small" onClick={() => unwind(resultDepth.current - 1)}>فال دوباره</button>
           </div>
         )}
       </div>

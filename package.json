@@ -2,8 +2,14 @@
   "name": "hafez-fal",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build", "preview": "vite preview" },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
   "dependencies": {
+    "@fontsource/noto-nastaliq-urdu": "^5.3.0",
+    "@fontsource/vazirmatn": "^5.3.0",
     "@react-three/drei": "^9.114.0",
     "@react-three/fiber": "^8.17.10",
     "gsap": "^3.12.5",

@@ -197,12 +197,13 @@ function Scene({ pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Pr
   )
 }
 
-const MAX_DPR = Math.min(window.devicePixelRatio, 1.5)
+const MAX_DPR = Math.min(window.devicePixelRatio, 2) // phones are 3x; 2x is crisp enough and keeps the GPU load sane
+const MIN_DPR = Math.min(window.devicePixelRatio, 1.25)
 export default function Book3D(props: Props) {
   const [dpr, setDpr] = useState(MAX_DPR) // drops to 1 if the device can't keep up
   return (
     <Canvas shadows dpr={dpr} camera={{ fov: 40, near: 0.1, far: 60, position: [0, 3.2, 3.8] }} onCreated={({ gl }) => { gl.toneMappingExposure = 1.05 }} style={{ position: 'fixed', inset: 0, direction: 'ltr' }}>
-      <PerformanceMonitor onDecline={() => setDpr(1)} onIncline={() => setDpr(MAX_DPR)} />
+      <PerformanceMonitor onDecline={() => setDpr(MIN_DPR)} onIncline={() => setDpr(MAX_DPR)} />
       <Scene {...props} />
     </Canvas>
   )
