@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Ghazal } from './types'
+import Props from './Props'
 
 const W = 2.0, D = 2.8, PIVOT_Y = 0.45
 const clamp = (x: number) => Math.min(1, Math.max(0, x))
@@ -165,6 +166,41 @@ function Smoke({ position }: { position: [number, number, number] }) {
   )
 }
 
+// A page that can curl: N segments along its width, rebuilt every frame from the hinge angle plus a lagging-tip bend.
+const SEG = 16, LW = W - 0.06, LD = D - 0.08, TH = 0.003
+function makeLeafGeometry() {
+  const g = new THREE.BufferGeometry(), n = (SEG + 1) * 2
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 2 * 3), 3))
+  const uv = new Float32Array(n * 2 * 2), idx: number[] = []
+  for (let k = 0; k <= SEG; k++) for (let j = 0; j < 2; j++) {
+    const v = j === 0 ? 1 : 0, i = k * 2 + j, s = k / SEG
+    uv.set([1 - s, v], i * 2); uv.set([s, v], (n + i) * 2)
+  }
+  for (let k = 0; k < SEG; k++) { const a = k * 2, b = a + 1, c = a + 2, d = a + 3; idx.push(a, b, c, b, d, c) }
+  const nTop = idx.length
+  for (let k = 0; k < SEG; k++) { const a = n + k * 2, b = a + 1, c = a + 2, d = a + 3; idx.push(a, c, b, b, c, d) }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx)
+  g.addGroup(0, nTop, 0); g.addGroup(nTop, idx.length - nTop, 1)
+  return g
+}
+function bendLeaf(g: THREE.BufferGeometry, hingeAngle: number, p: number, y0: number, xOff: number) {
+  const pos = g.attributes.position as THREE.BufferAttribute, n = (SEG + 1) * 2
+  const bend = 1.15 * Math.sin(Math.PI * p) // tip lags behind the hinge while the page travels
+  // rigid rotation of the page's resting offset about the hinge
+  let x = -y0 * Math.sin(hingeAngle) + xOff * 0, y = y0 * Math.cos(hingeAngle)
+  const ds = LW / SEG
+  for (let k = 0; k <= SEG; k++) {
+    const s = k / SEG, a = hingeAngle + bend * Math.pow(s, 1.4)
+    const tx = -Math.cos(a), ty = -Math.sin(a), nx = ty, ny = -tx
+    for (let j = 0; j < 2; j++) {
+      const z = (j === 0 ? -1 : 1) * LD / 2, i = k * 2 + j
+      pos.setXYZ(i, x + nx * TH, y + ny * TH, z); pos.setXYZ(n + i, x - nx * TH, y - ny * TH, z)
+    }
+    x += tx * ds; y += ty * ds
+  }
+  pos.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere()
+}
+
 const LEAVES = 6
 type Props = { openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: () => void }
 
@@ -175,6 +211,7 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
   const rightBlock = useRef<THREE.Mesh>(null)
   const rightBack = useRef<THREE.Mesh>(null)
   const flame = useRef<THREE.PointLight>(null)
+  const lamp = useRef<THREE.PointLight>(null)
   const dust = useRef<THREE.Points>(null)
   const cover = useMemo(() => coverTexture(), [])
   useEffect(() => { document.fonts?.ready.then(() => { cover.image = coverTexture().image; cover.needsUpdate = true }) }, [cover])
@@ -183,14 +220,15 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
   useEffect(() => { Promise.all([document.fonts.load('27px "Noto Nastaliq Urdu"', 'حافظ'), document.fonts.load('20px Vazirmatn', 'حافظ')]).then(() => setFontsOk(true)).catch(() => setFontsOk(true)) }, [])
   const leafTex = useMemo(() => {
     const pick = () => (data.length ? data[Math.floor(Math.random() * data.length)] : null)
-    return Array.from({ length: LEAVES - 1 }, () => ({ front: poemPage(pick()), back: poemPage(pick(), true) }))
+    return Array.from({ length: LEAVES - 1 }, () => ({ front: poemPage(pick()), back: poemPage(pick()) }))
   }, [data, fontsOk, seed])
   const blank = useMemo(() => poemPage(null), [])
   const lastFront = useMemo(() => poemPage(data.length ? data[Math.floor(Math.random() * data.length)] : null), [data, fontsOk, seed])
-  const finalPoem = useMemo(() => poemPage(ghazal, true), [ghazal, fontsOk])
+  const finalPoem = useMemo(() => poemPage(ghazal), [ghazal, fontsOk])
   const finalTafsir = useMemo(() => tafsirPage(ghazal), [ghazal, fontsOk])
   const prevP = useRef<number[]>([])
   const halo = useMemo(() => softTexture('217,164,65'), [])
+  const leafGeo = useMemo(() => Array.from({ length: LEAVES }, () => makeLeafGeometry()), [])
   const wood = useMemo(() => woodTexture(), [])
   const edge = useMemo(() => edgeTexture(), [])
   const spine = useRef<THREE.Group>(null)
@@ -210,10 +248,12 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
     const t = clock.elapsedTime
     const open = openRef.current
     // flip: cover first, then LEAVES pages, staggered across the opening
-    const p = [clamp(open / 0.2), ...Array.from({ length: LEAVES }, (_, i) => clamp((open - 0.16 - i * 0.13) / 0.22))]
+    const p = [clamp(open / 0.26), ...Array.from({ length: LEAVES }, (_, i) => clamp((open - 0.2 - i * 0.105) / 0.26))]
     parts.current.forEach((g, i) => {
       if (!g) return
-      g.rotation.z = -Math.PI * ease(p[i]) * (i ? 0.995 : 1)
+      const ang = -Math.PI * ease(p[i]) * (i ? 0.998 : 1)
+      if (i === 0) g.rotation.z = ang
+      else bendLeaf(leafGeo[i - 1], ang, ease(p[i]), 0.025 + (LEAVES - i) * 0.012, 0)
       const pr = prevP.current[i] ?? 0
       if ((pr < 0.04 && p[i] >= 0.04) || (pr > 0.96 && p[i] <= 0.96)) onFlip()
       prevP.current[i] = p[i]
@@ -225,18 +265,18 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
     if (rightBlock.current) rightBlock.current.visible = open > 0.02
     if (spine.current) spine.current.scale.y = 1 - 0.82 * o
     // candle flicker + dust drift
-    if (flame.current) flame.current.intensity = 5.5 + Math.sin(t * 9) * 0.6 + Math.sin(t * 23) * 0.4
+    const fl = 1 + 0.14 * Math.sin(t * 11.3) + 0.09 * Math.sin(t * 27.1 + 1.3) + 0.06 * Math.sin(t * 47.9 + 0.4) + (Math.random() - 0.5) * 0.06
+    if (flame.current) flame.current.intensity = 6.5 * fl
+    if (lamp.current) lamp.current.intensity = 10 * (0.9 + 0.1 * fl)
     if (dust.current) { dust.current.rotation.y = t * 0.02; dust.current.position.y = Math.sin(t * 0.3) * 0.15 }
-    // responsive camera
+    // responsive camera, blended continuously from the closed three-quarter view to the open top-down view
     const aspect = size.width / size.height, portrait = aspect < 0.9
-    let tx = 0, ty: number, tz: number, lx = 0
-    if (open < 0.05) { const d = Math.max(5.2, 4.2 / aspect); ty = d * 0.62; tz = d * 0.78 }
-    else {
-      const d = portrait ? Math.max(5.2, 4.4 / aspect) : Math.max(5.2, 8.4 / aspect)
-      ty = d * 0.93; tz = d * 0.37
-      if (portrait) lx = tx = page === 'poem' ? W / 2 : -W / 2
-    }
-    const k = 1 - Math.exp(-dt * 3), c = cur.current
+    const dc = Math.max(5.2, 4.2 / aspect)
+    const dO = portrait ? Math.max(5.2, 4.4 / aspect) : Math.max(5.2, 8.4 / aspect)
+    const m = ease(clamp(open / 0.35))
+    const lx = portrait && open > 0.5 ? (page === 'poem' ? W / 2 : -W / 2) : 0
+    const ty = dc * 0.62 * (1 - m) + dO * 0.93 * m, tz = dc * 0.78 * (1 - m) + dO * 0.37 * m, tx = lx
+    const k = 1 - Math.exp(-dt * 2.5), c = cur.current
     c.x += (tx - c.x) * k; c.y += (ty - c.y) * k; c.z += (tz - c.z) * k; c.lx += (lx - c.lx) * k
     camera.position.set(c.x + Math.sin(t * 0.2) * 0.12, c.y, c.z)
     camera.lookAt(c.lx, 0.3, 0)
@@ -248,8 +288,8 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
     <>
       <color attach="background" args={['#071326']} />
       <fog attach="fog" args={['#071326', 9, 20]} />
-      <ambientLight intensity={0.5} color="#8aa0d8" />
-      <pointLight position={[0.4, 3.2, 0.8]} color="#ffb45a" intensity={8} distance={14} decay={1.6} castShadow />
+      <ambientLight intensity={0.6} color="#8aa0d8" />
+      <pointLight ref={lamp} position={[0.4, 3.2, 0.8]} color="#ffb45a" intensity={10} distance={14} decay={1.6} castShadow />
       <group position={[3.6, 0, -2.3]}>
         <mesh position-y={0.03}><cylinderGeometry args={[0.2, 0.24, 0.06, 24]} /><meshStandardMaterial color="#b08d3a" metalness={0.7} roughness={0.35} /></mesh>
         <mesh position-y={0.36}><cylinderGeometry args={[0.07, 0.075, 0.6, 20]} /><meshStandardMaterial color="#e8dcc0" roughness={0.8} /></mesh>
@@ -265,6 +305,7 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
       ))}
 
       <mesh rotation-x={-Math.PI / 2} position-y={0.05}><planeGeometry args={[11, 11]} /><meshBasicMaterial map={halo} transparent opacity={0.28} blending={THREE.AdditiveBlending} depthWrite={false} /></mesh>
+      <Props />
       <Smoke position={[-3.5, 0, -2.0]} />
 
       <group ref={root}>
@@ -294,11 +335,9 @@ function Scene({ openRef, seed, page, ghazal, data, onFlip }: Props) {
                 {[4, 5].map(k => <meshStandardMaterial key={k} attach={`material-${k}`} color="#1a2f5c" />)}
               </mesh>
             ) : (
-              <mesh position={[-W / 2 + 0.01, 0.025 + (LEAVES - i) * 0.012, 0]}>
-                <boxGeometry args={[W - 0.06, 0.006, D - 0.08]} />
-                {[0, 1, 4, 5].map(k => <meshStandardMaterial key={k} attach={`material-${k}`} color="#e6d6ae" />)}
-                <meshStandardMaterial attach="material-2" map={i === LEAVES ? lastFront : leafTex[i - 1].front} roughness={0.95} />
-                <meshStandardMaterial attach="material-3" map={i === LEAVES ? finalPoem : leafTex[i - 1].back} roughness={0.95} />
+              <mesh geometry={leafGeo[i - 1]} position-x={-0.01} frustumCulled={false}>
+                <meshStandardMaterial attach="material-0" map={i === LEAVES ? lastFront : leafTex[i - 1].front} roughness={0.95} side={THREE.DoubleSide} />
+                <meshStandardMaterial attach="material-1" map={i === LEAVES ? finalPoem : leafTex[i - 1].back} roughness={0.95} side={THREE.DoubleSide} />
               </mesh>
             )}
           </group>
