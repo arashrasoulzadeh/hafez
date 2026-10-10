@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -208,6 +208,46 @@ function QuranGate() { // Darvaze-ye Quran, the gate of Shiraz where he was born
   )
 }
 
+// The poet's other works, stacked behind the Divan
+const OTHER_BOOKS: { title: string; color: string }[] = [
+  { title: 'قصاید', color: '#1f5a46' },
+  { title: 'قطعات', color: '#7a2433' },
+  { title: 'رباعیات', color: '#1d6a78' },
+  { title: 'ساقی‌نامه', color: '#6a4a22' },
+]
+function SmallBook({ title, color }: { title: string; color: string }) {
+  const tex = useMemo(() => {
+    const c = document.createElement('canvas'); c.width = 400; c.height = 560
+    const g = c.getContext('2d')!
+    g.fillStyle = color; g.fillRect(0, 0, 400, 560)
+    for (let i = 0; i < 3000; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; g.fillRect(Math.random() * 400, Math.random() * 560, 2, 2) }
+    g.strokeStyle = '#d9a441'; g.lineWidth = 5; g.strokeRect(22, 22, 356, 516); g.lineWidth = 2; g.strokeRect(34, 34, 332, 492)
+    g.beginPath(); g.ellipse(200, 280, 110, 150, 0, 0, Math.PI * 2); g.lineWidth = 3; g.stroke()
+    g.fillStyle = '#d9a441'; g.textAlign = 'center'; g.direction = 'rtl'
+    g.font = '58px "Noto Nastaliq Urdu", serif'; g.fillText(title, 200, 290, 200)
+    g.font = '24px Vazirmatn, sans-serif'; g.fillText('حافظ', 200, 80)
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
+  }, [title, color])
+  return (
+    <group>
+      <mesh position-y={0.05} castShadow receiveShadow>
+        <boxGeometry args={[0.85, 0.1, 1.2]} />
+        {[0, 1, 3, 4, 5].map(k => <meshStandardMaterial key={k} attach={`material-${k}`} color={color} roughness={0.6} />)}
+        <meshStandardMaterial attach="material-2" map={tex} roughness={0.5} metalness={0.25} />
+      </mesh>
+      <mesh position={[0.02, 0.05, 0]}><boxGeometry args={[0.8, 0.075, 1.16]} /><meshStandardMaterial color="#e6d6ae" roughness={1} /></mesh>
+    </group>
+  )
+}
+function OtherBooks() {
+  return (
+    <group>
+      <group position={[-1.0, 0.045, -2.75]} rotation-y={0.18}><SmallBook {...OTHER_BOOKS[0]} /><group position={[0.03, 0.1, 0.02]} rotation-y={-0.22}><SmallBook {...OTHER_BOOKS[1]} /></group></group>
+      <group position={[1.0, 0.045, -2.85]} rotation-y={-0.15}><SmallBook {...OTHER_BOOKS[2]} /><group position={[-0.02, 0.1, 0.03]} rotation-y={0.25}><SmallBook {...OTHER_BOOKS[3]} /></group></group>
+    </group>
+  )
+}
+
 type Item = { pos: [number, number]; rot?: number; tag: string; y: number; node: JSX.Element }
 const ITEMS: Item[] = [
   { pos: [-5.8, -1.0], tag: 'دروازه قرآن · زادگاه: شیراز، حدود ۷۱۷ ه.ق', y: 0.9, node: <QuranGate /> },
@@ -230,12 +270,17 @@ const ITEMS: Item[] = [
 ]
 
 export default function Props({ labels }: { labels: boolean }) {
+  const root = useRef<THREE.Group>(null)
+  const [fontsOk, setFontsOk] = useState(false)
+  useEffect(() => { Promise.all([document.fonts.load('58px "Noto Nastaliq Urdu"', 'حافظ'), document.fonts.load('24px Vazirmatn', 'حافظ')]).then(() => setFontsOk(true)).catch(() => setFontsOk(true)) }, [])
+  useEffect(() => { root.current?.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true } }) }, [])
   return (
-    <group>
+    <group ref={root}>
+      <OtherBooks key={String(fontsOk)} />
       {ITEMS.map((it, i) => (
         <group key={i} position={[it.pos[0], 0, it.pos[1]]} rotation-y={it.rot ?? 0}>
           {it.node}
-          {labels && <Html position={[0, it.y, 0]} center zIndexRange={[10, 0]}><div className="tag">{it.tag}</div></Html>}
+          {labels && <Html position={[0, 0.02, 0.2]} center zIndexRange={[10, 0]}><div className="tag"><b>{it.tag.split(' · ')[0]}</b><span>{it.tag.split(' · ')[1]}</span></div></Html>}
         </group>
       ))}
     </group>

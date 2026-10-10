@@ -48,11 +48,11 @@ export default function App() {
   const takeFal = () => {
     if (!data.length) return
     setGhazal(data[pick(data.length, niyat)]); setPage('poem'); setStage('opening')
-    gsap.to(prog.current, { v: 1, duration: 5.5, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => setStage('result') })
+    gsap.to(prog.current, { v: 1, duration: 9, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => setStage('result') })
   }
   const again = () => {
     setStage('opening')
-    gsap.to(prog.current, { v: 0, duration: 3, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => { setGhazal(null); setNiyat(''); setSeed(n => n + 1); setStage('niyat') } })
+    gsap.to(prog.current, { v: 0, duration: 4.5, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => { setGhazal(null); setNiyat(''); setSeed(n => n + 1); setStage('niyat') } })
   }
 
   return (

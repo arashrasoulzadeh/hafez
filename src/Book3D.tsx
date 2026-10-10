@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { Ghazal } from './types'
 import Props from './Props'
 
@@ -8,30 +9,87 @@ const W = 2.0, D = 2.8, PIVOT_Y = 0.45
 const clamp = (x: number) => Math.min(1, Math.max(0, x))
 const ease = (x: number) => x * x * (3 - 2 * x)
 
+const CW = 1024, CH = 1432
+function goldFill(g: CanvasRenderingContext2D, y0 = 0, y1 = CH) {
+  const gr = g.createLinearGradient(0, y0, 0, y1)
+  gr.addColorStop(0, '#f3d98a'); gr.addColorStop(0.5, '#c9962f'); gr.addColorStop(1, '#8f651a')
+  return gr
+}
+function lobed(g: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, lobes: number, depth: number) {
+  g.beginPath()
+  for (let i = 0; i <= 180; i++) {
+    const t = (i / 180) * Math.PI * 2, k = 1 + depth * Math.cos(lobes * t)
+    const x = cx + Math.cos(t) * rx * k, y = cy + Math.sin(t) * ry * k
+    i ? g.lineTo(x, y) : g.moveTo(x, y)
+  }
+  g.closePath()
+}
+function lens(g: CanvasRenderingContext2D, cx: number, cy: number, w: number, h: number, up: boolean) {
+  const d = up ? -1 : 1
+  g.beginPath(); g.moveTo(cx - w, cy); g.quadraticCurveTo(cx - w * 0.3, cy + d * h * 0.5, cx, cy + d * h)
+  g.quadraticCurveTo(cx + w * 0.3, cy + d * h * 0.5, cx + w, cy); g.closePath()
+}
 function coverTexture() {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 716
+  const c = document.createElement('canvas'); c.width = CW; c.height = CH
   const g = c.getContext('2d')!
-  g.fillStyle = '#1f3a6e'; g.fillRect(0, 0, 512, 716)
-  g.strokeStyle = '#d9a441'; g.lineWidth = 6; g.strokeRect(24, 24, 464, 668)
-  g.lineWidth = 2; g.strokeRect(40, 40, 432, 636)
-  g.beginPath(); g.ellipse(256, 358, 150, 210, 0, 0, Math.PI * 2); g.lineWidth = 4; g.stroke()
-  g.beginPath(); g.ellipse(256, 358, 128, 186, 0, 0, Math.PI * 2); g.lineWidth = 2; g.stroke()
-  g.save(); g.translate(256, 358); g.strokeStyle = 'rgba(217,164,65,0.4)'; g.lineWidth = 2
-  for (let r = 0; r < 2; r++) { g.rotate(Math.PI / 8 * r); g.beginPath(); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 - Math.PI / 2; g.lineTo(Math.cos(a) * 125, Math.sin(a) * 175); const b2 = a + Math.PI / 8; g.lineTo(Math.cos(b2) * 62, Math.sin(b2) * 88) } g.closePath(); g.stroke() }
+  const bg = g.createRadialGradient(CW / 2, CH / 2, 100, CW / 2, CH / 2, CH * 0.75)
+  bg.addColorStop(0, '#1d4a80'); bg.addColorStop(1, '#0c2147')
+  g.fillStyle = bg; g.fillRect(0, 0, CW, CH)
+  for (let i = 0; i < 14000; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.035)'; g.fillRect(Math.random() * CW, Math.random() * CH, 2 + Math.random() * 3, 2) }
+  const gold = goldFill(g)
+  g.strokeStyle = gold; g.fillStyle = gold
+  // triple frame
+  g.lineWidth = 12; g.strokeRect(46, 46, CW - 92, CH - 92)
+  g.lineWidth = 4; g.strokeRect(74, 74, CW - 148, CH - 148)
+  g.lineWidth = 3; g.strokeRect(96, 96, CW - 192, CH - 192)
+  for (let x = 120; x < CW - 120; x += 26) { g.fillRect(x, 85 - 2, 4, 4); g.fillRect(x, CH - 85 - 2, 4, 4) }
+  for (let y = 120; y < CH - 120; y += 26) { g.fillRect(85 - 2, y, 4, 4); g.fillRect(CW - 85 - 2, y, 4, 4) }
+  // quarter medallions in the corners
+  for (const [cx, cy] of [[96, 96], [CW - 96, 96], [96, CH - 96], [CW - 96, CH - 96]]) {
+    g.save(); g.beginPath(); g.rect(cx < CW / 2 ? 96 : CW - 96 - 220, cy < CH / 2 ? 96 : CH - 96 - 220, 220, 220); g.clip()
+    lobed(g, cx, cy, 190, 190, 12, 0.05); g.fillStyle = 'rgba(217,164,65,0.12)'; g.fill(); g.lineWidth = 5; g.stroke()
+    lobed(g, cx, cy, 150, 150, 12, 0.05); g.lineWidth = 2.5; g.stroke(); g.restore()
+  }
+  // central medallion (tarang) with pendants
+  const cx = CW / 2, cy = CH / 2
+  for (const up of [true, false]) { lens(g, cx, cy + (up ? -300 : 300), 70, 190, up); g.fillStyle = 'rgba(217,164,65,0.18)'; g.fill(); g.lineWidth = 5; g.stroke() }
+  lobed(g, cx, cy, 300, 400, 16, 0.045); g.fillStyle = '#0f3158'; g.fill(); g.lineWidth = 9; g.stroke()
+  lobed(g, cx, cy, 262, 360, 16, 0.04); g.lineWidth = 3; g.stroke()
+  g.save(); g.translate(cx, cy); g.lineWidth = 2.5
+  for (let r = 0; r < 2; r++) { g.rotate(Math.PI / 8); g.beginPath(); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 - Math.PI / 2; g.lineTo(Math.cos(a) * 245, Math.sin(a) * 340); const b2 = a + Math.PI / 8; g.lineTo(Math.cos(b2) * 120, Math.sin(b2) * 166) } g.closePath(); g.globalAlpha = 0.55; g.stroke(); g.globalAlpha = 1 }
+  for (let i = 0; i < 12; i++) { g.rotate(Math.PI / 6); g.beginPath(); g.ellipse(0, -150, 26, 62, 0, 0, Math.PI * 2); g.globalAlpha = 0.5; g.stroke(); g.globalAlpha = 1 }
   g.restore()
-  for (let i = 0; i < 16; i++) { // ornament petals around the medallion
-    const a = (i / 16) * Math.PI * 2
-    g.beginPath(); g.arc(256 + Math.cos(a) * 170, 358 + Math.sin(a) * 230, 7, 0, Math.PI * 2); g.fillStyle = '#d9a441'; g.fill()
-  }
-  for (const [cx, cy, sx, sy] of [[40, 40, 1, 1], [472, 40, -1, 1], [40, 676, 1, -1], [472, 676, -1, -1]]) {
-    g.beginPath(); g.arc(cx, cy, 70, 0, Math.PI / 2); g.save(); g.translate(cx, cy); g.scale(sx, sy); g.restore()
-    g.save(); g.translate(cx, cy); g.scale(sx, sy); g.beginPath(); g.arc(0, 0, 76, 0, Math.PI / 2); g.lineWidth = 3; g.stroke(); g.beginPath(); g.arc(0, 0, 52, 0, Math.PI / 2); g.lineWidth = 2; g.stroke(); g.restore()
-  }
-  g.fillStyle = '#d9a441'; g.textAlign = 'center'
-  g.font = '64px "Noto Nastaliq Urdu", serif'; g.fillText('حافظ', 256, 350)
-  g.font = '26px Vazirmatn, sans-serif'; g.fillText('دیوان لسان‌الغیب', 256, 430)
+  g.fillStyle = gold
+  for (let i = 0; i < 28; i++) { const t = (i / 28) * Math.PI * 2; g.beginPath(); g.arc(cx + Math.cos(t) * 340, cy + Math.sin(t) * 445, 6, 0, 7); g.fill() }
+  g.textAlign = 'center'; g.direction = 'rtl'
+  g.font = '190px "Noto Nastaliq Urdu", serif'
+  g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillText('حافظ', cx + 5, cy + 30 + 6); g.fillStyle = gold; g.fillText('حافظ', cx, cy + 30)
+  g.font = '50px Vazirmatn, sans-serif'; g.fillStyle = gold; g.fillText('دیوان لسان‌الغیب', cx, cy + 150)
+  g.font = '34px Vazirmatn, sans-serif'; g.globalAlpha = 0.85; g.fillText('خواجه شمس‌الدین محمد شیرازی', cx, cy + 215); g.globalAlpha = 1
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
   return t
+}
+function grainTexture() { // leather grain used as bump map
+  const c = document.createElement('canvas'); c.width = c.height = 256
+  const g = c.getContext('2d')!
+  g.fillStyle = '#808080'; g.fillRect(0, 0, 256, 256)
+  for (let i = 0; i < 9000; i++) { const v = 90 + Math.random() * 90; g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); g.arc(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 2, 0, 7); g.fill() }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 5)
+  return t
+}
+function endpaperTexture() { // marbled endpaper, visible on the inside of the open cover
+  const c = document.createElement('canvas'); c.width = 512; c.height = 716
+  const g = c.getContext('2d')!
+  g.fillStyle = '#e9dcb8'; g.fillRect(0, 0, 512, 716)
+  const cols = ['#1f3a6e', '#8b2b3a', '#c9962f', '#2a7a7a']
+  for (let i = 0; i < 70; i++) {
+    g.strokeStyle = cols[i % 4]; g.globalAlpha = 0.28; g.lineWidth = 2 + Math.random() * 4
+    g.beginPath(); const y = Math.random() * 716; g.moveTo(-10, y)
+    for (let x = 0; x <= 530; x += 40) g.lineTo(x, y + Math.sin(x / 60 + i) * 26 + Math.cos(x / 23 + i * 2) * 8)
+    g.stroke()
+  }
+  g.globalAlpha = 1; g.strokeStyle = '#c9962f'; g.lineWidth = 4; g.strokeRect(20, 20, 472, 676)
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
 }
 
 const PAPER = '#efe3c2'
@@ -167,7 +225,7 @@ function Smoke({ position }: { position: [number, number, number] }) {
 }
 
 // A page that can curl: N segments along its width, rebuilt every frame from the hinge angle plus a lagging-tip bend.
-const SEG = 16, LW = W - 0.06, LD = D - 0.08, TH = 0.003
+const SEG = 16, LW = W - 0.06, LD = D - 0.08, TH = 0.0015, DY = 0.004
 function makeLeafGeometry() {
   const g = new THREE.BufferGeometry(), n = (SEG + 1) * 2
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 2 * 3), 3))
@@ -201,7 +259,7 @@ function bendLeaf(g: THREE.BufferGeometry, hingeAngle: number, p: number, y0: nu
   pos.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere()
 }
 
-const LEAVES = 6
+const LEAVES = 28
 type Props = { zoomOut: boolean; openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: () => void }
 
 function Scene({ zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
@@ -215,14 +273,18 @@ function Scene({ zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
   const lamp = useRef<THREE.PointLight>(null)
   const dust = useRef<THREE.Points>(null)
   const cover = useMemo(() => coverTexture(), [])
+  const grain = useMemo(() => grainTexture(), [])
+  const endpaper = useMemo(() => endpaperTexture(), [])
   useEffect(() => { document.fonts?.ready.then(() => { cover.image = coverTexture().image; cover.needsUpdate = true }) }, [cover])
 
   const [fontsOk, setFontsOk] = useState(false)
   useEffect(() => { Promise.all([document.fonts.load('27px "Noto Nastaliq Urdu"', 'حافظ'), document.fonts.load('20px Vazirmatn', 'حافظ')]).then(() => setFontsOk(true)).catch(() => setFontsOk(true)) }, [])
-  const leafTex = useMemo(() => {
+  const pool = useMemo(() => {
     const pick = () => (data.length ? data[Math.floor(Math.random() * data.length)] : null)
-    return Array.from({ length: LEAVES - 1 }, () => ({ front: poemPage(pick()), back: poemPage(pick()) }))
+    return Array.from({ length: 10 }, () => poemPage(pick(), false, 0.4)) // low-res pages shared by the flipping leaves
   }, [data, fontsOk, seed])
+  const poolMats = useMemo(() => pool.map(t => new THREE.MeshStandardMaterial({ map: t, roughness: 0.95, side: THREE.DoubleSide })), [pool])
+  const leafPick = useMemo(() => Array.from({ length: LEAVES }, () => [Math.floor(Math.random() * 10), Math.floor(Math.random() * 10)]), [seed])
   const blank = useMemo(() => poemPage(null), [])
   const lastFront = useMemo(() => poemPage(data.length ? data[Math.floor(Math.random() * data.length)] : null), [data, fontsOk, seed])
   const finalPoem = useMemo(() => poemPage(ghazal), [ghazal, fontsOk])
@@ -230,6 +292,12 @@ function Scene({ zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
   const prevP = useRef<number[]>([])
   const halo = useMemo(() => softTexture('217,164,65'), [])
   const leafGeo = useMemo(() => Array.from({ length: LEAVES }, () => makeLeafGeometry()), [])
+  const gl = useThree(st => st.gl), scene = useThree(st => st.scene)
+  useEffect(() => {
+    const pm = new THREE.PMREMGenerator(gl), env = pm.fromScene(new RoomEnvironment(), 0.04).texture
+    scene.environment = env; scene.environmentIntensity = 0.3
+    return () => { scene.environment = null; env.dispose(); pm.dispose() }
+  }, [gl, scene])
   const wood = useMemo(() => woodTexture(), [])
   const edge = useMemo(() => edgeTexture(), [])
   const spine = useRef<THREE.Group>(null)
@@ -249,19 +317,20 @@ function Scene({ zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
     const t = clock.elapsedTime
     const open = openRef.current
     // flip: cover first, then LEAVES pages, staggered across the opening
-    const p = [clamp(open / 0.26), ...Array.from({ length: LEAVES }, (_, i) => clamp((open - 0.2 - i * 0.105) / 0.26))]
+    const FD = 0.12, ST = (0.97 - 0.18 - FD) / (LEAVES - 1)
+    const p = [clamp(open / 0.2), ...Array.from({ length: LEAVES }, (_, i) => clamp((open - 0.18 - i * ST) / FD))]
     parts.current.forEach((g, i) => {
       if (!g) return
       const ang = -Math.PI * ease(p[i]) * (i ? 0.998 : 1)
       if (i === 0) g.rotation.z = ang
-      else bendLeaf(leafGeo[i - 1], ang, ease(p[i]), 0.025 + (LEAVES - i) * 0.012, 0)
+      else if (p[i] !== prevP.current[i] || prevP.current[i] === undefined) bendLeaf(leafGeo[i - 1], ang, ease(p[i]), 0.025 + (LEAVES - i) * DY, 0)
       const pr = prevP.current[i] ?? 0
       if ((pr < 0.04 && p[i] >= 0.04) || (pr > 0.96 && p[i] <= 0.96)) onFlip()
       prevP.current[i] = p[i]
     })
     const o = ease(open)
     if (root.current) root.current.position.x = (1 - o) * W / 2
-    if (rightBlock.current) { rightBlock.current.scale.y = Math.max(0.001, o); rightBlock.current.position.y = 0.04 + 0.13 * o }
+    if (rightBlock.current) { rightBlock.current.scale.y = Math.max(0.001, o); rightBlock.current.position.y = 0.04 + 0.105 * o }
     if (rightGrp.current) { const a0 = parts.current[0]?.rotation.z ?? 0; rightGrp.current.scale.x = a0 < -Math.PI / 2 ? Math.max(0.0001, -Math.cos(a0)) : 0.0001 }
     if (spine.current) spine.current.scale.y = 1 - 0.82 * o
     // candle flicker + dust drift
@@ -292,7 +361,7 @@ function Scene({ zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
       <color attach="background" args={['#071326']} />
       <fog attach="fog" args={['#071326', 20, 48]} />
       <ambientLight intensity={0.6} color="#8aa0d8" />
-      <pointLight ref={lamp} position={[0.4, 3.2, 0.8]} color="#ffb45a" intensity={10} distance={14} decay={1.6} castShadow />
+      <pointLight ref={lamp} position={[0.4, 3.2, 0.8]} color="#ffb45a" intensity={10} distance={14} decay={1.6} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-radius={4} />
       <group position={[3.6, 0, -2.3]}>
         <mesh position-y={0.03}><cylinderGeometry args={[0.2, 0.24, 0.06, 24]} /><meshStandardMaterial color="#b08d3a" metalness={0.7} roughness={0.35} /></mesh>
         <mesh position-y={0.36}><cylinderGeometry args={[0.07, 0.075, 0.6, 20]} /><meshStandardMaterial color="#e8dcc0" roughness={0.8} /></mesh>
@@ -326,23 +395,32 @@ function Scene({ zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
 
         <group ref={rightGrp} scale-x={0.0001}>
         <mesh ref={rightBack} position={[W / 2, 0.02, 0]}><boxGeometry args={[W, 0.04, D]} /><meshStandardMaterial color="#1a2f5c" roughness={0.6} /></mesh>
-        <mesh ref={rightBlock} position={[W / 2, 0.04, 0]} scale-y={0.001}><boxGeometry args={[W - 0.06, 0.26, D - 0.08]} />{pageBlockMat}</mesh>
+        <mesh ref={rightBlock} position={[W / 2, 0.04, 0]} scale-y={0.001}><boxGeometry args={[W - 0.06, 0.21, D - 0.08]} />{pageBlockMat}</mesh>
         </group>
 
         {Array.from({ length: LEAVES + 1 }, (_, i) => i).map(i => (
           <group key={i} ref={el => { if (el) parts.current[i] = el }} position={[0, PIVOT_Y, 0]}>
             {i === 0 ? (
-              <mesh position={[-W / 2, 0.025 + LEAVES * 0.012 + 0.03, 0]} castShadow>
+              <mesh position={[-W / 2, 0.025 + LEAVES * DY + 0.03, 0]} castShadow>
                 <boxGeometry args={[W, 0.04, D]} />
                 {[0, 1].map(k => <meshStandardMaterial key={k} attach={`material-${k}`} color="#1a2f5c" roughness={0.6} />)}
-                <meshStandardMaterial attach="material-2" map={cover} roughness={0.5} metalness={0.2} />
-                <meshStandardMaterial attach="material-3" color="#e6d6ae" />
+                <meshStandardMaterial attach="material-2" map={cover} bumpMap={grain} bumpScale={0.9} roughness={0.42} metalness={0.3} />
+                <meshStandardMaterial attach="material-3" map={endpaper} roughness={0.9} />
                 {[4, 5].map(k => <meshStandardMaterial key={k} attach={`material-${k}`} color="#1a2f5c" />)}
               </mesh>
             ) : (
               <mesh geometry={leafGeo[i - 1]} position-x={-0.01} frustumCulled={false}>
-                <meshStandardMaterial attach="material-0" map={i === LEAVES ? lastFront : leafTex[i - 1].front} roughness={0.95} side={THREE.DoubleSide} />
-                <meshStandardMaterial attach="material-1" map={i === LEAVES ? finalPoem : leafTex[i - 1].back} roughness={0.95} side={THREE.DoubleSide} />
+                {i === LEAVES ? (
+                  <>
+                    <meshStandardMaterial attach="material-0" map={lastFront} roughness={0.95} side={THREE.DoubleSide} />
+                    <meshStandardMaterial attach="material-1" map={finalPoem} roughness={0.95} side={THREE.DoubleSide} />
+                  </>
+                ) : (
+                  <>
+                    <primitive object={poolMats[leafPick[i - 1][0]]} attach="material-0" />
+                    <primitive object={poolMats[leafPick[i - 1][1]]} attach="material-1" />
+                  </>
+                )}
               </mesh>
             )}
           </group>
