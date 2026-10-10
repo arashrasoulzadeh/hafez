@@ -1,19 +1,13 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-
-function soft(rgb: string) {
-  const c = document.createElement('canvas'); c.width = c.height = 128
-  const x = c.getContext('2d')!, g = x.createRadialGradient(64, 64, 0, 64, 64, 64)
-  g.addColorStop(0, `rgba(${rgb},1)`); g.addColorStop(0.35, `rgba(${rgb},0.3)`); g.addColorStop(1, `rgba(${rgb},0)`)
-  x.fillStyle = g; x.fillRect(0, 0, 128, 128)
-  return new THREE.CanvasTexture(c)
-}
+import { M } from './materials'
+import { once, softTexture } from './textures'
 
 // A brass-based wax candle with a layered, flickering flame, a soft glow sprite and its own warm light.
 export default function Candle({ position, phase = 0, height = 0.55 }: { position: [number, number, number]; phase?: number; height?: number }) {
   const flame = useRef<THREE.Group>(null), light = useRef<THREE.PointLight>(null), glow = useRef<THREE.Sprite>(null)
-  const glowTex = useMemo(() => soft('255,170,70'), [])
+  const glowTex = once('flame-glow', () => softTexture('255,170,70'))
   const flameGeo = useMemo(() => new THREE.LatheGeometry([[0, 0], [0.026, 0.02], [0.038, 0.055], [0.03, 0.105], [0.015, 0.16], [0, 0.23]].map(([x, y]) => new THREE.Vector2(x, y)), 16), [])
   const saucer = useMemo(() => new THREE.LatheGeometry([[0, 0], [0.19, 0], [0.23, 0.035], [0.2, 0.04], [0.08, 0.025], [0, 0.03]].map(([x, y]) => new THREE.Vector2(x, y)), 28), [])
   const top = 0.045 + height
@@ -26,7 +20,7 @@ export default function Candle({ position, phase = 0, height = 0.55 }: { positio
   })
   return (
     <group position={position}>
-      <mesh geometry={saucer}><meshStandardMaterial color="#b08d3a" metalness={0.8} roughness={0.3} /></mesh>
+      <mesh geometry={saucer}><primitive object={M.brass} attach="material" /></mesh>
       <mesh position-y={0.045 + height / 2}><cylinderGeometry args={[0.062, 0.068, height, 24]} /><meshStandardMaterial color="#efe3c4" roughness={0.65} /></mesh>
       <mesh position-y={top + 0.002}><cylinderGeometry args={[0.058, 0.062, 0.012, 24]} /><meshStandardMaterial color="#f6ecd2" roughness={0.5} emissive="#ff9a3c" emissiveIntensity={0.25} /></mesh>
       <mesh position={[0.05, top - 0.07, 0.03]} scale={[1, 2.5, 1]}><sphereGeometry args={[0.016, 8, 8]} /><meshStandardMaterial color="#efe3c4" roughness={0.6} /></mesh>

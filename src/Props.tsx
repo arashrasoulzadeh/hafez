@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Html } from '@react-three/drei'
+import { M } from './materials'
+import { once, kashiTexture, stoneTexture } from './textures'
 import * as THREE from 'three'
 
 // Things a 14th-century Shirazi poet would have around him: ink and quill, a wine flask and cup,
 // rose and pomegranates, prayer beads, a manuscript scroll, an astrolabe and a ney.
-const brass = { color: '#b08d3a', metalness: 0.75, roughness: 0.35 }
 const lathe = (pts: [number, number][]) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), 28)
 
 function Inkwell() {
   return (
     <group>
-      <mesh position-y={0.07}><cylinderGeometry args={[0.13, 0.15, 0.14, 24]} /><meshStandardMaterial {...brass} /></mesh>
+      <mesh position-y={0.07}><cylinderGeometry args={[0.13, 0.15, 0.14, 24]} /><primitive object={M.brass} attach="material" /></mesh>
       <mesh position-y={0.141}><cylinderGeometry args={[0.095, 0.095, 0.004, 24]} /><meshStandardMaterial color="#05070c" roughness={0.15} metalness={0.3} /></mesh>
       <mesh position={[0.32, 0.03, 0.12]} rotation={[0, -0.5, 0.06]}><cylinderGeometry args={[0.012, 0.016, 0.95, 8]} /><meshStandardMaterial color="#8a5a2a" roughness={0.7} /></mesh>
       <group position={[-0.1, 0.012, 0.42]} rotation={[0, 0.55, 0]}>
@@ -57,7 +58,7 @@ function Tasbih() {
   return (
     <group>
       {beads.map(([x, z], i) => <mesh key={i} position={[x, 0.028, z]}><sphereGeometry args={[0.028, 10, 8]} /><meshStandardMaterial color="#3b2a1a" roughness={0.4} /></mesh>)}
-      <mesh position={[0.3, 0.03, 0.2]}><sphereGeometry args={[0.04, 10, 8]} /><meshStandardMaterial {...brass} /></mesh>
+      <mesh position={[0.3, 0.03, 0.2]}><sphereGeometry args={[0.04, 10, 8]} /><primitive object={M.brass} attach="material" /></mesh>
     </group>
   )
 }
@@ -65,9 +66,9 @@ function Tasbih() {
 function Scroll() {
   return (
     <group rotation={[0, 0.5, 0]}>
-      <mesh position-y={0.075} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.075, 0.075, 0.95, 20]} /><meshStandardMaterial color="#e9dcb4" roughness={0.9} /></mesh>
-      {[-0.47, 0.47].map(x => <mesh key={x} position={[x, 0.075, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.032, 0.032, 0.04, 12]} /><meshStandardMaterial {...brass} /></mesh>)}
-      <mesh position={[0, 0.003, 0.2]} scale={[1.2, 0.05, 0.9]}><boxGeometry args={[0.8, 0.02, 0.4]} /><meshStandardMaterial color="#e9dcb4" roughness={0.95} /></mesh>
+      <mesh position-y={0.075} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.075, 0.075, 0.95, 20]} /><primitive object={M.cream} attach="material" /></mesh>
+      {[-0.47, 0.47].map(x => <mesh key={x} position={[x, 0.075, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.032, 0.032, 0.04, 12]} /><primitive object={M.brass} attach="material" /></mesh>)}
+      <mesh position={[0, 0.003, 0.2]} scale={[1.2, 0.05, 0.9]}><boxGeometry args={[0.8, 0.02, 0.4]} /><primitive object={M.cream} attach="material" /></mesh>
     </group>
   )
 }
@@ -75,10 +76,10 @@ function Scroll() {
 function Astrolabe() {
   return (
     <group>
-      <mesh position-y={0.014}><cylinderGeometry args={[0.24, 0.24, 0.028, 40]} /><meshStandardMaterial {...brass} /></mesh>
-      <mesh position-y={0.03} rotation-x={Math.PI / 2}><torusGeometry args={[0.2, 0.012, 8, 40]} /><meshStandardMaterial {...brass} /></mesh>
-      <mesh position-y={0.034} rotation-x={Math.PI / 2}><torusGeometry args={[0.1, 0.008, 8, 32]} /><meshStandardMaterial {...brass} /></mesh>
-      <mesh position={[0, 0.04, -0.27]} rotation-x={Math.PI / 2}><torusGeometry args={[0.04, 0.012, 8, 20]} /><meshStandardMaterial {...brass} /></mesh>
+      <mesh position-y={0.014}><cylinderGeometry args={[0.24, 0.24, 0.028, 40]} /><primitive object={M.brass} attach="material" /></mesh>
+      <mesh position-y={0.03} rotation-x={Math.PI / 2}><torusGeometry args={[0.2, 0.012, 8, 40]} /><primitive object={M.brass} attach="material" /></mesh>
+      <mesh position-y={0.034} rotation-x={Math.PI / 2}><torusGeometry args={[0.1, 0.008, 8, 32]} /><primitive object={M.brass} attach="material" /></mesh>
+      <mesh position={[0, 0.04, -0.27]} rotation-x={Math.PI / 2}><torusGeometry args={[0.04, 0.012, 8, 20]} /><primitive object={M.brass} attach="material" /></mesh>
     </group>
   )
 }
@@ -87,36 +88,35 @@ function Ney() {
   return (
     <group rotation={[0, -0.25, 0]}>
       <mesh position-y={0.03} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.022, 0.022, 1.5, 12]} /><meshStandardMaterial color="#8a5a2a" roughness={0.6} /></mesh>
-      {[-0.5, -0.1, 0.3, 0.6].map(x => <mesh key={x} position={[x, 0.03, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.026, 0.026, 0.025, 12]} /><meshStandardMaterial {...brass} /></mesh>)}
+      {[-0.5, -0.1, 0.3, 0.6].map(x => <mesh key={x} position={[x, 0.03, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.026, 0.026, 0.025, 12]} /><primitive object={M.brass} attach="material" /></mesh>)}
     </group>
   )
 }
 
-const gold = { color: '#d9a441', metalness: 0.8, roughness: 0.3 }
-const wood = { color: '#6b4426', roughness: 0.7 }
 
 function Quran() { // he was called "Hafez" for knowing the Quran by heart
   return (
     <group rotation-y={0.5}>
-      <mesh position={[0, 0.17, 0]} rotation={[0, 0, 0.5]}><boxGeometry args={[0.46, 0.025, 0.42]} /><meshStandardMaterial {...wood} /></mesh>
+      <mesh position={[0, 0.17, 0]} rotation={[0, 0, 0.5]}><boxGeometry args={[0.46, 0.025, 0.42]} /><primitive object={M.wood} attach="material" /></mesh>
       <mesh position={[0, 0.2, 0]} rotation={[0, 0, 0.5]}><boxGeometry args={[0.4, 0.07, 0.3]} /><meshStandardMaterial color="#1c5a3c" roughness={0.6} /></mesh>
-      <mesh position={[0.005, 0.238, 0]} rotation={[0, 0, 0.5]}><boxGeometry args={[0.3, 0.006, 0.2]} /><meshStandardMaterial {...gold} /></mesh>
-      <mesh position={[-0.12, 0.07, 0]}><boxGeometry args={[0.025, 0.14, 0.38]} /><meshStandardMaterial {...wood} /></mesh>
-      <mesh position={[0.14, 0.04, 0]}><boxGeometry args={[0.025, 0.08, 0.38]} /><meshStandardMaterial {...wood} /></mesh>
+      <mesh position={[0.005, 0.238, 0]} rotation={[0, 0, 0.5]}><boxGeometry args={[0.3, 0.006, 0.2]} /><primitive object={M.gold} attach="material" /></mesh>
+      <mesh position={[-0.12, 0.07, 0]}><boxGeometry args={[0.025, 0.14, 0.38]} /><primitive object={M.wood} attach="material" /></mesh>
+      <mesh position={[0.14, 0.04, 0]}><boxGeometry args={[0.025, 0.08, 0.38]} /><primitive object={M.wood} attach="material" /></mesh>
     </group>
   )
 }
 
 function Tomb() { // the Hafezieh pavilion in Shiraz; he died in 792 AH (1390 CE)
+  const kashi = once('kashi', kashiTexture), stone = once('stone', stoneTexture)
   const dome = useMemo(() => new THREE.SphereGeometry(0.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), [])
   return (
     <group>
-      <mesh position-y={0.02}><cylinderGeometry args={[0.42, 0.44, 0.04, 24]} /><meshStandardMaterial color="#cdbf9d" roughness={0.9} /></mesh>
-      <mesh position-y={0.07}><cylinderGeometry args={[0.36, 0.38, 0.06, 24]} /><meshStandardMaterial color="#cdbf9d" roughness={0.9} /></mesh>
+      <mesh position-y={0.02}><cylinderGeometry args={[0.42, 0.44, 0.04, 24]} /><meshStandardMaterial map={stone} roughness={0.9} /></mesh>
+      <mesh position-y={0.07}><cylinderGeometry args={[0.36, 0.38, 0.06, 24]} /><meshStandardMaterial map={stone} roughness={0.9} /></mesh>
       {Array.from({ length: 8 }, (_, i) => { const a = (i / 8) * Math.PI * 2; return <mesh key={i} position={[Math.cos(a) * 0.27, 0.34, Math.sin(a) * 0.27]}><cylinderGeometry args={[0.018, 0.022, 0.5, 10]} /><meshStandardMaterial color="#e8dcc0" roughness={0.6} /></mesh> })}
-      <mesh position-y={0.6}><cylinderGeometry args={[0.32, 0.32, 0.03, 24]} /><meshStandardMaterial {...gold} /></mesh>
-      <mesh geometry={dome} position-y={0.615}><meshStandardMaterial color="#1f8fa0" roughness={0.4} metalness={0.2} /></mesh>
-      <mesh position-y={0.95}><sphereGeometry args={[0.025, 10, 8]} /><meshStandardMaterial {...gold} /></mesh>
+      <mesh position-y={0.6}><cylinderGeometry args={[0.32, 0.32, 0.03, 24]} /><primitive object={M.gold} attach="material" /></mesh>
+      <mesh geometry={dome} position-y={0.615}><meshStandardMaterial map={kashi} roughness={0.35} metalness={0.15} /></mesh>
+      <mesh position-y={0.95}><sphereGeometry args={[0.025, 10, 8]} /><primitive object={M.gold} attach="material" /></mesh>
       <mesh position-y={0.12}><boxGeometry args={[0.3, 0.07, 0.14]} /><meshStandardMaterial color="#2a2a30" roughness={0.3} /></mesh>
     </group>
   )
@@ -125,8 +125,8 @@ function Tomb() { // the Hafezieh pavilion in Shiraz; he died in 792 AH (1390 CE
 function Hourglass() { // passing time, and death
   return (
     <group>
-      {[0.02, 0.46].map(y => <mesh key={y} position-y={y}><cylinderGeometry args={[0.12, 0.12, 0.03, 20]} /><meshStandardMaterial {...wood} /></mesh>)}
-      {[0, 2.1, 4.2].map(a => <mesh key={a} position={[Math.cos(a) * 0.1, 0.24, Math.sin(a) * 0.1]}><cylinderGeometry args={[0.008, 0.008, 0.44, 6]} /><meshStandardMaterial {...gold} /></mesh>)}
+      {[0.02, 0.46].map(y => <mesh key={y} position-y={y}><cylinderGeometry args={[0.12, 0.12, 0.03, 20]} /><primitive object={M.wood} attach="material" /></mesh>)}
+      {[0, 2.1, 4.2].map(a => <mesh key={a} position={[Math.cos(a) * 0.1, 0.24, Math.sin(a) * 0.1]}><cylinderGeometry args={[0.008, 0.008, 0.44, 6]} /><primitive object={M.gold} attach="material" /></mesh>)}
       <mesh position-y={0.14} rotation-x={Math.PI}><coneGeometry args={[0.085, 0.2, 18]} /><meshStandardMaterial color="#cfe8f0" transparent opacity={0.35} roughness={0.05} /></mesh>
       <mesh position-y={0.34}><coneGeometry args={[0.085, 0.2, 18]} /><meshStandardMaterial color="#cfe8f0" transparent opacity={0.35} roughness={0.05} /></mesh>
       <mesh position-y={0.075}><coneGeometry args={[0.06, 0.1, 14]} /><meshStandardMaterial color="#d9b878" roughness={0.9} /></mesh>
@@ -170,7 +170,7 @@ function Cypress() { // the cypress of Shiraz, the beloved's stature
 function JamJam() { // the world-revealing cup
   return (
     <group>
-      <mesh position-y={0.04}><cylinderGeometry args={[0.14, 0.16, 0.08, 24]} /><meshStandardMaterial {...gold} /></mesh>
+      <mesh position-y={0.04}><cylinderGeometry args={[0.14, 0.16, 0.08, 24]} /><primitive object={M.gold} attach="material" /></mesh>
       <mesh position-y={0.24}><sphereGeometry args={[0.17, 28, 20]} /><meshStandardMaterial color="#9fd8ff" transparent opacity={0.3} roughness={0.03} metalness={0.1} /></mesh>
       <mesh position-y={0.24}><sphereGeometry args={[0.03, 12, 10]} /><meshBasicMaterial color="#ffd27a" /></mesh>
     </group>
@@ -191,9 +191,9 @@ function Oud() { // music of the court and the Sufi gathering
 function Crown() { // his royal patrons: Shah Shuja and the Muzaffarids
   return (
     <group>
-      <mesh position-y={0.04}><boxGeometry args={[0.4, 0.08, 0.4]} /><meshStandardMaterial color="#7a1c2a" roughness={0.9} /></mesh>
-      <mesh position-y={0.13}><cylinderGeometry args={[0.1, 0.09, 0.09, 20, 1, true]} /><meshStandardMaterial {...gold} side={THREE.DoubleSide} /></mesh>
-      {Array.from({ length: 6 }, (_, i) => { const a = (i / 6) * Math.PI * 2; return <mesh key={i} position={[Math.cos(a) * 0.095, 0.2, Math.sin(a) * 0.095]}><coneGeometry args={[0.02, 0.06, 6]} /><meshStandardMaterial {...gold} /></mesh> })}
+      <mesh position-y={0.04}><boxGeometry args={[0.4, 0.08, 0.4]} /><primitive object={M.cloth} attach="material" /></mesh>
+      <mesh position-y={0.13}><cylinderGeometry args={[0.1, 0.09, 0.09, 20, 1, true]} /><meshStandardMaterial color="#d9a441" metalness={0.8} roughness={0.3} side={THREE.DoubleSide} /></mesh>
+      {Array.from({ length: 6 }, (_, i) => { const a = (i / 6) * Math.PI * 2; return <mesh key={i} position={[Math.cos(a) * 0.095, 0.2, Math.sin(a) * 0.095]}><coneGeometry args={[0.02, 0.06, 6]} /><primitive object={M.gold} attach="material" /></mesh> })}
     </group>
   )
 }
@@ -201,9 +201,9 @@ function Crown() { // his royal patrons: Shah Shuja and the Muzaffarids
 function QuranGate() { // Darvaze-ye Quran, the gate of Shiraz where he was born (~1315 CE)
   return (
     <group>
-      {[-0.3, 0.3].map(x => <mesh key={x} position={[x, 0.25, 0]}><boxGeometry args={[0.1, 0.5, 0.14]} /><meshStandardMaterial color="#c9a46a" roughness={0.95} /></mesh>)}
-      <mesh position-y={0.5}><torusGeometry args={[0.3, 0.05, 8, 24, Math.PI]} /><meshStandardMaterial color="#c9a46a" roughness={0.95} /></mesh>
-      <mesh position={[0, 0.58, 0]}><boxGeometry args={[0.76, 0.06, 0.16]} /><meshStandardMaterial color="#b88f55" roughness={0.95} /></mesh>
+      {[-0.3, 0.3].map(x => <mesh key={x} position={[x, 0.25, 0]}><boxGeometry args={[0.1, 0.5, 0.14]} /><meshStandardMaterial map={once('stone', stoneTexture)} roughness={0.95} /></mesh>)}
+      <mesh position-y={0.5}><torusGeometry args={[0.3, 0.05, 8, 24, Math.PI]} /><meshStandardMaterial map={once('stone', stoneTexture)} roughness={0.95} /></mesh>
+      <mesh position={[0, 0.58, 0]}><boxGeometry args={[0.76, 0.06, 0.16]} /><meshStandardMaterial map={once('stone', stoneTexture)} roughness={0.95} /></mesh>
     </group>
   )
 }
@@ -228,6 +228,7 @@ function SmallBook({ title, color }: { title: string; color: string }) {
     g.font = '24px Vazirmatn, sans-serif'; g.fillText('حافظ', 200, 80)
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
   }, [title, color])
+  useEffect(() => () => tex.dispose(), [tex])
   return (
     <group>
       <mesh position-y={0.008}><boxGeometry args={[0.85, 0.016, 1.2]} /><meshStandardMaterial color={color} roughness={0.6} /></mesh>

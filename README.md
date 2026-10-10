@@ -10,3 +10,15 @@ A responsive 3D Hafez divination: set an intention, a book opens and its pages t
 npm install
 npm run dev
 ```
+
+## Code layout
+
+- `src/App.tsx` — flow (intro → intention → book opens → fal), audio, full-interpretation dialog.
+- `src/Book3D.tsx` — the 3D scene: book, lights, camera, table.
+- `src/leaf.ts` — bendable page geometry (page curl).
+- `src/textures.ts` — every procedural texture (cover, pages, wood, tiles…), built once and shared.
+- `src/materials.ts` — shared brass/gold/wood/cloth materials.
+- `src/Props.tsx`, `Candle.tsx`, `Smoke.tsx` — the objects on the table.
+- `data/` and `scripts/` — the Ganjoor corpus and the scripts that fetch it.
+
+Interpretations come from Ganjoor and are AI-generated there; the app says so on the interpretation page.
