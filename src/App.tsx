@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import Book3D from './Book3D'
 import { cleanTafsir, TAFSIR_NOTE, type Ghazal, type Stage } from './types'
-import { world } from './constants'
+import { world, keepBusy } from './constants'
 
 // On slow devices keep real-time pacing instead of letting gsap stretch the animation frame by frame
 gsap.ticker.lagSmoothing(0)
@@ -27,7 +27,9 @@ async function loadFlip(ctx: AudioContext) {
 
 export default function App() {
   const [stage, setStage] = useState<Stage>('intro')
-  const [data, setData] = useState<Ghazal[]>([])
+  const [pool, setPool] = useState<Ghazal[]>([]) // a few ghazals for the turning pages; the fal itself is fetched on demand
+  const [count, setCount] = useState(0)
+  const [failed, setFailed] = useState(false)
   const [ghazal, setGhazal] = useState<Ghazal | null>(null)
   const [niyat, setNiyat] = useState('')
   const openRef = useRef(0)
@@ -37,13 +39,14 @@ export default function App() {
   const [zoomOut, setZoomOut] = useState(false)
   const [pages, setPages] = useState(12)
   const [showTafsir, setShowTafsir] = useState(false)
+  const [readTab, setReadTab] = useState<'poem' | 'tafsir'>('poem')
   const [portrait, setPortrait] = useState(innerWidth / innerHeight < 0.9)
   const audio = useRef<HTMLAudioElement | null>(null)
   const prog = useRef({ v: 0 })
   const flipRef = useRef<(rate?: number, gain?: number) => void>(() => {})
 
   useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __openRef: typeof openRef }).__openRef = openRef }, []) // dev only: lets me scrub the opening animation
-  useEffect(() => { fetch(`${import.meta.env.BASE_URL}ghazals.json`).then(r => r.json()).then(setData) }, [])
+  useEffect(() => { keepBusy(4000); fetch(`${import.meta.env.BASE_URL}index.json`).then(r => r.json()).then(d => { setPool(d.pool); setCount(d.count) }).catch(() => setFailed(true)) }, [])
   // Back button: the open book and every overlay push a history entry, so the browser / Android back button peels them off one by one
   const layers = useRef<{ id: string; close: () => void }[]>([])
   const resultDepth = useRef(0)
@@ -58,51 +61,69 @@ export default function App() {
   }, [])
   const openTafsir = () => { if (topId() === 'read') return; openLayer('read', () => setShowTafsir(false)); setShowTafsir(true) }
   const toggleZoom = () => {
+    keepBusy(3000)
     if (!zoomOut) { openLayer('zoom', () => setZoomOut(false)); setZoomOut(true) }
     else if (topId() === 'zoom') unwind()
     else setZoomOut(false)
   }
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && topId() === 'read') unwind() }; addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [])
-  useEffect(() => { const f = () => setPortrait(innerWidth / innerHeight < 0.9); addEventListener('resize', f); return () => removeEventListener('resize', f) }, [])
+  useEffect(() => { const f = () => { keepBusy(1200); setPortrait(innerWidth / innerHeight < 0.9) }; addEventListener('resize', f); return () => removeEventListener('resize', f) }, [])
   useEffect(() => { const el = audio.current; if (!el) return; if (music) el.play().catch(() => {}); else el.pause() }, [music])
 
   const start = () => {
     if (!audio.current) { audio.current = new Audio(`${import.meta.env.BASE_URL}audio/sample.wav`); audio.current.loop = true; audio.current.volume = 0.5 }
     const Ctx = window.AudioContext || (window as any).webkitAudioContext
     const ctx = new Ctx(); ctx.resume().catch(() => {}); loadFlip(ctx).then(f => { flipRef.current = f }).catch(() => {})
+    keepBusy(4200)
     gsap.to(world, { lit: 1, duration: 3.2, ease: 'power2.out' })
     setStage('niyat')
   }
-  const takeFal = () => {
-    if (!data.length) return
+  const takeFal = async () => {
+    if (!count) return
     const n = 8 + Math.floor(Math.random() * 13) // 8–20 pages before the fal
-    setPages(n); setGhazal(data[pick(data.length, niyat)]); setPage('poem'); setStage('opening')
-    gsap.to(prog.current, { v: 1, duration: 3.5 + n * 0.28, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => { setStage('result'); openLayer('result', again); resultDepth.current = layers.current.length } })
+    let g: Ghazal
+    try { g = await (await fetch(`${import.meta.env.BASE_URL}g/${1 + pick(count, niyat)}.json`)).json() } catch { setFailed(true); return }
+    setFailed(false); setPages(n); setGhazal(g); setPage('poem'); setStage('opening'); setReadTab('poem')
+    keepBusy((3.5 + n * 0.28) * 1000 + 3000)
+    gsap.to(prog.current, { v: 1, duration: 3.5 + n * 0.28, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => {
+      setStage('result'); openLayer('result', again); resultDepth.current = layers.current.length; keepBusy(3000)
+      if (innerWidth / innerHeight < 0.9) setTimeout(openTafsir, 1100) // on a phone the page text is small: raise the reading sheet by itself
+    } })
   }
   const again = () => {
-    setStage('opening')
+    setStage('opening'); keepBusy(7000)
     gsap.to(prog.current, { v: 0, duration: 4.5, ease: 'power1.inOut', onUpdate: () => { openRef.current = prog.current.v }, onComplete: () => { setGhazal(null); setNiyat(''); setSeed(n => n + 1); setStage('niyat') } })
   }
 
   return (
     <>
-      <Book3D pages={pages} zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={data} onFlip={(r, g) => flipRef.current(r, g)} />
+      <Book3D reading={stage === 'result'} pages={pages} zoomOut={zoomOut} openRef={openRef} seed={seed} page={page} ghazal={ghazal} data={pool} onFlip={(r, g) => flipRef.current(r, g)} />
       {stage === 'result' && !showTafsir && !zoomOut && <div className="read-hit" onClick={openTafsir} aria-hidden />}
-      <div className="vignette" />
+      <div className={`vignette${stage === 'result' ? ' soft' : ''}`} />
       <div className="title">فال حافظ</div>
       {showTafsir && ghazal && (
         <div className="modal" onClick={() => unwind()}>
-          <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="تفسیر کامل">
-            <button className="btn small close" onClick={() => unwind()}>بستن</button>
+          <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="خواندن غزل و تفسیر">
+            <div className="sheet-head">
+              <div className="tabs" role="tablist">
+                <button role="tab" aria-selected={readTab === 'poem'} className={readTab === 'poem' ? 'on' : ''} onClick={() => setReadTab('poem')}>غزل</button>
+                <button role="tab" aria-selected={readTab === 'tafsir'} className={readTab === 'tafsir' ? 'on' : ''} onClick={() => setReadTab('tafsir')}>تفسیر</button>
+              </div>
+              <button className="btn small close" onClick={() => unwind()}>بستن</button>
+            </div>
             <h2>{ghazal.title}</h2>
-            {ghazal.summary && <p className="sum">{cleanTafsir(ghazal.summary)}</p>}
-            {ghazal.couplets.map((c, i) => (
-              <section key={i}>
-                <div className="verse">{c.v.map((l, j) => <span key={j}>{l}</span>)}</div>
-                {c.s && <p>{cleanTafsir(c.s)}</p>}
-              </section>
-            ))}
-            <small>{TAFSIR_NOTE} منبع: <a href="https://ganjoor.net/hafez" target="_blank" rel="noreferrer">گنجور</a></small>
+            {readTab === 'poem' ? (
+              <div className="poem-read">{ghazal.couplets.map((c, i) => <p key={i}>{c.v.map((l, j) => <span key={j}>{l}</span>)}</p>)}</div>
+            ) : (<>
+              {ghazal.summary && <p className="sum">{cleanTafsir(ghazal.summary)}</p>}
+              {ghazal.couplets.map((c, i) => (
+                <section key={i}>
+                  <div className="verse">{c.v.map((l, j) => <span key={j}>{l}</span>)}</div>
+                  {c.s && <p>{cleanTafsir(c.s)}</p>}
+                </section>
+              ))}
+              <small>{TAFSIR_NOTE} منبع: <a href="https://ganjoor.net/hafez" target="_blank" rel="noreferrer">گنجور</a></small>
+            </>)}
           </div>
         </div>
       )}
@@ -120,14 +141,14 @@ export default function App() {
       <div className="ui">
         {stage === 'intro' && (<><p className="hint">به نام خداوند جان و خرد</p><button className="btn" onClick={start}>آغاز</button></>)}
         {stage === 'niyat' && (<>
-          <p className="hint">نیت کن، سپس فال بگیر</p>
+          <p className="hint">{failed ? 'اتصال برقرار نشد. دوباره تلاش کن.' : 'نیت کن، سپس فال بگیر'}</p>
           <textarea className="niyat" aria-label="نیت" rows={2} placeholder="نیت خود را بنویس (اختیاری)…" value={niyat} onChange={e => setNiyat(e.target.value)} />
-          <button className="btn" onClick={takeFal} disabled={!data.length}>فال بگیر</button>
+          <button className="btn" onClick={takeFal} disabled={!count}>فال بگیر</button>
         </>)}
         {stage === 'result' && (
           <div className="row pagebtns">
-            {portrait && <button className="btn small" onClick={() => setPage(p => p === 'poem' ? 'tafsir' : 'poem')}>{page === 'poem' ? 'تفسیر ←' : '→ شعر'}</button>}
-            <button className="btn small" onClick={openTafsir}>تفسیر کامل</button>
+            {portrait && <button className="btn small" onClick={() => { keepBusy(2500); setPage(p => p === 'poem' ? 'tafsir' : 'poem') }}>{page === 'poem' ? 'تفسیر ←' : '→ شعر'}</button>}
+            <button className="btn small" onClick={openTafsir}>خواندن</button>
             <button className="btn small" onClick={() => unwind(resultDepth.current - 1)}>فال دوباره</button>
           </div>
         )}

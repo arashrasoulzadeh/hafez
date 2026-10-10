@@ -11,4 +11,7 @@ export const clamp = (x: number) => Math.min(1, Math.max(0, x))
 export const ease = (x: number) => x * x * (3 - 2 * x)
 
 // Shared, mutable scene state written by the UI layer and read inside the render loop (no React re-renders)
-export const world = { lit: 1 } // 0 = candles barely lit, 1 = full light
+export const world = { lit: 1, busyUntil: 0 } // lit: 0 = candles barely lit, 1 = full light; busyUntil: render at full rate until then, idle rate after
+// Something is moving (page turn, camera glide, light fade): render at full rate for a while; otherwise the scene idles at a low frame rate
+export const keepBusy = (ms: number) => { world.busyUntil = Math.max(world.busyUntil, performance.now() + ms) }
+export const isBusy = () => performance.now() < world.busyUntil

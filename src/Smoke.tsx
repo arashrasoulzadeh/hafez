@@ -7,7 +7,7 @@ import { once, softTexture } from './textures'
 export default function Smoke({ position }: { position: [number, number, number] }) {
   const tex = useMemo(() => once('smoke', () => softTexture('200,212,240')), [])
   const refs = useRef<(THREE.Sprite | null)[]>([])
-  const seeds = useMemo(() => Array.from({ length: 16 }, (_, i) => ({ ph: i / 16, a: Math.random() * 6.28, sp: 0.8 + Math.random() * 0.6 })), [])
+  const seeds = useMemo(() => Array.from({ length: 10 }, (_, i) => ({ ph: i / 10, a: Math.random() * 6.28, sp: 0.8 + Math.random() * 0.6 })), [])
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
     seeds.forEach((sd, i) => {

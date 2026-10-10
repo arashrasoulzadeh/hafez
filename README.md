@@ -19,6 +19,14 @@ npm run dev
 - `src/textures.ts` — every procedural texture (cover, pages, wood, tiles…), built once and shared.
 - `src/materials.ts` — shared brass/gold/wood/cloth materials.
 - `src/Props.tsx`, `Candle.tsx`, `Smoke.tsx` — the objects on the table.
-- `data/` and `scripts/` — the Ganjoor corpus and the scripts that fetch it.
+- `src/Effects.tsx` — bloom, depth of field and tone mapping (lazy-loaded chunk).
+- `data/` and `scripts/` — the Ganjoor corpus and the scripts that fetch it; `scripts/split_data.py` writes `public/g/<n>.json` (one file per ghazal, fetched when a fal is drawn) and `public/index.json` (the pages that turn).
 
 Interpretations come from Ganjoor and are AI-generated there; the app says so on the interpretation page.
+
+## Performance notes
+
+- Frame rate is adaptive: full rate only while something moves (page turn, camera glide, light fade), 30 fps (24 on phones) while idle, nothing in a hidden tab.
+- The shadow map is redrawn only while something moves.
+- Post effects and the live shadow switch off, and resolution drops, if the device can't keep up (`PerformanceMonitor`).
+- One ghazal (≈3 KB) is downloaded per fal instead of the whole corpus; textures and materials are shared.

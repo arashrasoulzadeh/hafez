@@ -1,21 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { PerformanceMonitor } from '@react-three/drei'
-import { EffectComposer, Bloom, DepthOfField, ToneMapping } from '@react-three/postprocessing'
-import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { Ghazal } from './types'
-import { W, D, PIVOT_Y, MAXL, DY, clamp, ease, world } from './constants'
+import { W, D, PIVOT_Y, MAXL, DY, clamp, ease, world, isBusy } from './constants'
 import { makeLeaf, stepLeaf } from './leaf'
-import { once, poemPage, plainPage, tafsirPage, coverTexture, grainTexture, endpaperTexture, woodTexture, edgeTexture, softTexture, noiseTexture } from './textures'
+import { once, clearTextureCache, poemPage, plainPage, tafsirPage, coverTexture, grainTexture, endpaperTexture, woodTexture, edgeTexture, softTexture, noiseTexture } from './textures'
 import Props from './Props'
 import Candle from './Candle'
 import Smoke from './Smoke'
 
-type Props = { low: boolean; pages: number; zoomOut: boolean; openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: (rate?: number, gain?: number) => void }
+type Props = { reading: boolean; low: boolean; pages: number; zoomOut: boolean; openRef: { current: number }; seed: number; page: 'poem' | 'tafsir'; ghazal: Ghazal | null; data: Ghazal[]; onFlip: (rate?: number, gain?: number) => void }
 
-function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
+function Scene({ reading, low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip }: Props) {
   const { camera, size } = useThree()
   const root = useRef<THREE.Group>(null)
   const parts = useRef<THREE.Group[]>([])
@@ -35,11 +33,11 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
   useEffect(() => { Promise.all([document.fonts.load('27px "Noto Nastaliq Urdu"', 'حافظ'), document.fonts.load('20px Vazirmatn', 'حافظ')]).then(() => setFontsOk(true)).catch(() => setFontsOk(true)) }, [])
   const pool = useMemo(() => {
     const pick = () => (data.length ? data[Math.floor(Math.random() * data.length)] : null)
-    return Array.from({ length: 10 }, () => poemPage(pick(), false, 0.4)) // low-res pages shared by the flipping leaves
+    return Array.from({ length: 8 }, () => poemPage(pick(), false, 0.4)) // low-res pages shared by the turning leaves and the loose sheets
   }, [data, fontsOk, seed])
   const bump = once('noise', noiseTexture)
   const poolMats = useMemo(() => pool.map(t => new THREE.MeshStandardMaterial({ map: t, bumpMap: bump, bumpScale: 0.35, roughness: 0.95, side: THREE.DoubleSide })), [pool, bump])
-  const leafPick = useMemo(() => Array.from({ length: MAXL }, () => [Math.floor(Math.random() * 10), Math.floor(Math.random() * 10)]), [seed])
+  const leafPick = useMemo(() => Array.from({ length: MAXL }, () => [Math.floor(Math.random() * 8), Math.floor(Math.random() * 8)]), [seed])
   const plain = useMemo(() => plainPage(), [])
   const lastFront = useMemo(() => poemPage(data.length ? data[Math.floor(Math.random() * data.length)] : null, false, 0.5), [data, fontsOk, seed]) // seen only for a moment, so half size
   const finalPoem = useMemo(() => poemPage(ghazal), [ghazal, fontsOk])
@@ -65,25 +63,27 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
   const wood = once('wood', woodTexture)
   const edge = once('edge', edgeTexture)
   const spine = useRef<THREE.Group>(null)
-  const sheetMats = useMemo(() => Array.from({ length: 6 }, () => new THREE.MeshStandardMaterial({
-    map: poemPage(data.length ? data[Math.floor(Math.random() * data.length)] : null, false, 0.4), bumpMap: bump, bumpScale: 0.35, roughness: 0.95,
-  })), [data, fontsOk, bump])
-  useEffect(() => () => { sheetMats.forEach(m => { m.map?.dispose(); m.dispose() }) }, [sheetMats])
-  const sheets = useMemo(() => Array.from({ length: 26 }, (_, i) => ({ m: i % 6, x: (Math.random() - 0.5) * 12, z: -1.9 - Math.random() * 2.9, r: (Math.random() - 0.5) * 1.3, s: 0.85 + Math.random() * 0.35 })), [])
+  const sheets = useMemo(() => Array.from({ length: 22 }, (_, i) => ({ m: i % 8, x: (Math.random() - 0.5) * 12, z: -1.9 - Math.random() * 2.9, r: (Math.random() - 0.5) * 1.3, s: 0.85 + Math.random() * 0.35 })), [])
 
   const dustGeo = useMemo(() => {
-    const n = 120, a = new Float32Array(n * 3)
+    const n = 70, a = new Float32Array(n * 3)
     for (let i = 0; i < n; i++) { a[i * 3] = (Math.random() - .5) * 8; a[i * 3 + 1] = Math.random() * 4; a[i * 3 + 2] = (Math.random() - .5) * 6 }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3)); return g
   }, [])
 
   const cur = useRef({ x: 0, y: 3.2, z: 3.8, lx: 0, zf: 1 })
+  const pArr = useRef(new Float32Array(MAXL + 1)) // flip progress per leaf, reused every frame
+  const shadowT = useRef(-9)
   useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime
     const open = openRef.current
+    // the shadow map is redrawn only while something moves (and once in a while for the table props), not every frame
+    if (isBusy() || t - shadowT.current > 1.5) { gl.shadowMap.needsUpdate = true; shadowT.current = t }
     // flip: cover first, then the active leaves (the lowest `n` of the stack), staggered across the opening
     const n = pagesRef.current, FD = 0.12, ST = (0.97 - 0.18 - FD) / Math.max(1, n - 1)
-    const p = [clamp(open / 0.2), ...Array.from({ length: MAXL }, (_, i) => { const j = i - (MAXL - n); return j < 0 ? 0 : clamp((open - 0.18 - j * ST) / FD) })]
+    const p = pArr.current
+    p[0] = clamp(open / 0.2)
+    for (let i = 0; i < MAXL; i++) { const j = i - (MAXL - n); p[i + 1] = j < 0 ? 0 : clamp((open - 0.18 - j * ST) / FD) }
     // the cover: a damped spring chasing the scripted angle, with a hard stop (and a small bounce + thud) at each end
     const cv = coverSpring.current, dtc = Math.min(dt, 0.1), steps = Math.max(2, Math.ceil(dtc / 0.0083)), hs = dtc / steps, target = -Math.PI * ease(p[0])
     for (let k = 0; k < steps; k++) {
@@ -141,7 +141,7 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
       <hemisphereLight ref={hemi} args={['#6f86c8', '#3a2418', 0.5]} />
       <directionalLight position={[-5, 4, -4]} intensity={0.45} color="#7f95e0" />
       <directionalLight position={[3, 5, 7]} intensity={0.18} color="#ffd9b0" />
-      <spotLight ref={lamp} position={[0.8, 5.6, 2.4]} angle={0.75} penumbra={1} color="#ffd2a0" intensity={95} distance={22} decay={2} castShadow={!low} shadow-mapSize={[1024, 1024]} shadow-bias={-0.0003} shadow-radius={6} />
+      <spotLight ref={lamp} position={[0.8, 5.6, 2.4]} angle={0.75} penumbra={1} color="#ffd2a0" intensity={95} distance={22} decay={2} castShadow={!low} shadow-mapSize={[1024, 1024]} shadow-camera-near={3} shadow-camera-far={13} shadow-bias={-0.0003} shadow-radius={6} />
       <mesh ref={bookBlob} rotation-x={-Math.PI / 2} position-y={0.006} renderOrder={1}><planeGeometry args={[1, 1]} /><meshBasicMaterial map={once('blob', () => softTexture('0,0,0'))} transparent opacity={0.6} depthWrite={false} toneMapped={false} /></mesh>
       <Candle position={[3.6, 0.05, -2.3]} moth />
       <Candle position={[-3.4, 0.05, -3.3]} phase={2.1} height={0.45} />
@@ -149,7 +149,7 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
       <mesh rotation-x={-Math.PI / 2} receiveShadow><planeGeometry args={[40, 40]} /><meshStandardMaterial map={wood} bumpMap={wood} bumpScale={0.8} roughness={0.72} /></mesh>
       {sheets.map((sh, i) => (
         <mesh key={i} position={[sh.x, 0.004 + i * 0.0016, sh.z]} rotation={[-Math.PI / 2, 0, sh.r]} scale={sh.s} receiveShadow>
-          <planeGeometry args={[1.25, 1.75]} /><primitive object={sheetMats[sh.m]} attach="material" />
+          <planeGeometry args={[1.25, 1.75]} /><primitive object={poolMats[sh.m]} attach="material" />
         </mesh>
       ))}
 
@@ -215,45 +215,47 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
   )
 }
 
-// Phones get bloom only: depth of field is the expensive pass
 const TOUCH = window.matchMedia('(pointer: coarse)').matches
-// Bloom on the candle flames, glints on the brass, and a soft focus falling off behind the book. The composer renders to a linear
-// target, so tone mapping moves from the renderer into the effect chain.
-const FOCUS = new THREE.Vector3(0, 0.35, 0)
-function Effects({ zoomOut }: { zoomOut: boolean }) {
-  const gl = useThree(st => st.gl)
-  const dof = useRef<any>(null)
-  // keep the focal plane on the book however the camera moves; blur only what is clearly in front of or behind it
-  useFrame(({ camera }) => {
-    const e = dof.current; if (!e) return
-    e.circleOfConfusionMaterial.worldFocusDistance = camera.position.distanceTo(FOCUS)
-    e.circleOfConfusionMaterial.worldFocusRange = 1.6
-    e.bokehScale = zoomOut ? 0 : 2.4
-  })
+const Effects = lazy(() => import('./Effects')) // own chunk
+
+const MAX_DPR = Math.min(window.devicePixelRatio, TOUCH ? 2 : 1.5) // 2x on phones keeps text crisp; desktops stay at 1.5x to spare fill rate and memory
+const MIN_DPR = Math.min(window.devicePixelRatio, 1.25)
+// Render only as often as needed: full rate while something moves, a calm rate while the scene just idles (candle flicker, smoke).
+// A frame is never drawn in a hidden tab (rAF is paused there).
+function Governor() {
+  const advance = useThree(st => st.advance)
   useEffect(() => {
-    const prev = gl.toneMapping
-    gl.toneMapping = THREE.NoToneMapping
-    return () => { gl.toneMapping = prev }
-  }, [gl])
-  return (
-    <EffectComposer multisampling={4} enableNormalPass={false}>
-      <>{!TOUCH && <DepthOfField ref={dof} bokehScale={2.4} height={480} />}</>
-      <Bloom mipmapBlur luminanceThreshold={0.8} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-    </EffectComposer>
-  )
+    let id = 0, last = 0
+    const idle = 1000 / (TOUCH ? 24 : 30)
+    const loop = (t: number) => {
+      id = requestAnimationFrame(loop)
+      if (t - last >= (isBusy() ? 15 : idle) - 2) { last = t; advance(t / 1000) }
+    }
+    id = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(id)
+  }, [advance])
+  return null
 }
 
-const MAX_DPR = Math.min(window.devicePixelRatio, 2) // phones are 3x; 2x is crisp enough and keeps the GPU load sane
-const MIN_DPR = Math.min(window.devicePixelRatio, 1.25)
 export default function Book3D(props: Omit<Props, 'low'>) {
-  const [dpr, setDpr] = useState(MAX_DPR) // drops (and the live shadow is switched off) if the device can't keep up
+  const [dpr, setDpr] = useState(MAX_DPR) // drops (and the live shadow and post effects switch off) if the device can't keep up
   const [low, setLow] = useState(false)
+  const [epoch, setEpoch] = useState(0) // bumped after a lost WebGL context: everything is rebuilt
   return (
-    <Canvas shadows dpr={dpr} camera={{ fov: 40, near: 0.1, far: 60, position: [0, 3.2, 3.8] }} onCreated={({ gl }) => { gl.toneMappingExposure = 1.05 }} style={{ position: 'fixed', inset: 0, direction: 'ltr' }}>
+    <Canvas
+      frameloop="never" shadows dpr={dpr} camera={{ fov: 40, near: 0.1, far: 60, position: [0, 3.2, 3.8] }}
+      gl={{ powerPreference: 'high-performance', antialias: false, stencil: false }}
+      onCreated={({ gl }) => {
+        gl.toneMappingExposure = 1.05
+        gl.shadowMap.autoUpdate = false
+        gl.domElement.addEventListener('webglcontextrestored', () => { clearTextureCache(); setEpoch(e => e + 1) })
+      }}
+      style={{ position: 'fixed', inset: 0, direction: 'ltr' }}
+    >
+      <Governor />
       <PerformanceMonitor onDecline={() => { setDpr(MIN_DPR); setLow(true) }} onIncline={() => { setDpr(MAX_DPR); setLow(false) }} />
-      <Scene {...props} low={low} />
-      {!low && <Effects zoomOut={props.zoomOut} />}
+      <Scene key={epoch} {...props} low={low} />
+      {!low && <Suspense fallback={null}><Effects zoomOut={props.zoomOut} reading={props.reading} /></Suspense>}
     </Canvas>
   )
 }

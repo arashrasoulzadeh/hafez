@@ -5,6 +5,7 @@ export const QUALITY = 1 // full-size page and cover canvases on every device: p
 
 // Textures shared by many objects are built once
 const cache = new Map<string, THREE.Texture>()
+export const clearTextureCache = () => cache.clear() // after a lost WebGL context the released canvases must be redrawn
 export const once = (key: string, make: () => THREE.Texture) => {
   let t = cache.get(key)
   if (!t) { t = make(); cache.set(key, t) }
@@ -132,12 +133,20 @@ export function endpaperTexture() { // marbled endpaper, visible on the inside o
 
 const PAPER = '#efe3c2'
 const PW = 1024, PH = 1432, INK = '#2a1c10', ACCENT = '#854F0B'
+let paperBase: HTMLCanvasElement | null = null // paper colour + fibres, drawn once at half size and reused by every page
+function basePaper() {
+  if (paperBase) return paperBase
+  const c = document.createElement('canvas'); c.width = PW / 2; c.height = PH / 2
+  const x = c.getContext('2d')!
+  x.fillStyle = PAPER; x.fillRect(0, 0, c.width, c.height)
+  for (let i = 0; i < 1400; i++) { x.fillStyle = `rgba(120,90,40,${Math.random() * 0.05})`; x.fillRect(Math.random() * c.width, Math.random() * c.height, 2, 2) }
+  return (paperBase = c)
+}
 function paper(k = 1) {
   const c = document.createElement('canvas'); c.width = PW * k; c.height = PH * k
   const x = c.getContext('2d')!
   x.scale(k, k)
-  x.fillStyle = PAPER; x.fillRect(0, 0, PW, PH)
-  for (let i = 0; i < 2500; i++) { x.fillStyle = `rgba(120,90,40,${Math.random() * 0.05})`; x.fillRect(Math.random() * PW, Math.random() * PH, 3, 3) }
+  x.drawImage(basePaper(), 0, 0, PW, PH)
   x.strokeStyle = 'rgba(133,79,11,0.55)'; x.lineWidth = 3; x.strokeRect(46, 46, PW - 92, PH - 92)
   x.lineWidth = 1.5; x.strokeRect(58, 58, PW - 116, PH - 116)
   x.direction = 'rtl'; x.textAlign = 'center'

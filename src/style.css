@@ -51,3 +51,17 @@ html,body,#root{margin:0;height:100%;background:var(--night);color:var(--paper);
 .read-hit{position:fixed;inset:9% 5% 20% 5%;z-index:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ui,.title,.mute,.zoom,.credits{z-index:2}
 .vignette{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at 50% 46%,transparent 52%,rgba(2,5,12,.5) 100%)}
+.vignette{transition:opacity 1.4s}
+.vignette.soft{opacity:.3}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px;position:sticky;top:-22px;padding:6px 0;background:var(--paper);z-index:1}
+.sheet-head .close{float:none;position:static}
+.tabs{display:flex;gap:6px}
+.tabs button{background:transparent;border:1px solid #8a6a2a;color:#854F0B;border-radius:16px;padding:5px 18px;font:500 14px 'Vazirmatn';cursor:pointer}
+.tabs button.on{background:#854F0B;color:var(--paper)}
+.poem-read p{margin:0 0 6px;display:flex;flex-wrap:wrap;justify-content:center;gap:0 2.2rem;font-family:'Noto Nastaliq Urdu','Vazirmatn',serif;font-size:clamp(20px,5.6vw,27px);line-height:2.35;text-align:center}
+@keyframes rise{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.sheet{animation:rise .35s ease-out}
+@media (max-width:600px){
+  .modal{align-items:flex-end;padding:0}
+  .sheet{width:100%;max-height:88dvh;border-radius:18px 18px 0 0;border-bottom:0}
+}
