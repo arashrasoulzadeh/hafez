@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { PerformanceMonitor } from '@react-three/drei'
+import { EffectComposer, Bloom, DepthOfField, ToneMapping } from '@react-three/postprocessing'
+import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { Ghazal } from './types'
@@ -48,6 +50,7 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
   useEffect(() => () => { finalPoem.dispose() }, [finalPoem])
   useEffect(() => () => { finalTafsir.dispose() }, [finalTafsir])
   const prevP = useRef<number[]>([])
+  const leafDir = useRef<number[]>([]) // +1 while a leaf is opening, -1 while closing
   const pagesRef = useRef(pages)
   pagesRef.current = pages
   const halo = once('halo', () => softTexture('217,164,65'))
@@ -82,8 +85,8 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
     const n = pagesRef.current, FD = 0.12, ST = (0.97 - 0.18 - FD) / Math.max(1, n - 1)
     const p = [clamp(open / 0.2), ...Array.from({ length: MAXL }, (_, i) => { const j = i - (MAXL - n); return j < 0 ? 0 : clamp((open - 0.18 - j * ST) / FD) })]
     // the cover: a damped spring chasing the scripted angle, with a hard stop (and a small bounce + thud) at each end
-    const cv = coverSpring.current, hs = Math.min(dt, 1 / 30) / 2, target = -Math.PI * ease(p[0])
-    for (let k = 0; k < 2; k++) {
+    const cv = coverSpring.current, dtc = Math.min(dt, 0.1), steps = Math.max(2, Math.ceil(dtc / 0.0083)), hs = dtc / steps, target = -Math.PI * ease(p[0])
+    for (let k = 0; k < steps; k++) {
       cv.v += (60 * (target - cv.a) - 10 * cv.v) * hs; cv.a += cv.v * hs
       if (cv.a > 0) { if (cv.v > 0.9) onFlip(0.55, Math.min(1, cv.v / 4)); cv.a = 0; cv.v *= -0.2 }
       else if (cv.a < -Math.PI) { if (cv.v < -0.9) onFlip(0.55, Math.min(1, -cv.v / 4)); cv.a = -Math.PI; cv.v *= -0.25 }
@@ -94,7 +97,8 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
       if ((pr < 0.04 && pi >= 0.04) || (pr > 0.96 && pi <= 0.96)) onFlip(0.9 + Math.random() * 0.25)
       prevP.current[i] = pi
       if (i <= MAXL - n) continue // unused leaf
-      stepLeaf(leaves[i - 1], -Math.PI * ease(pi) * 0.998, 0.025 + (MAXL - i) * DY, dt, t, i === MAXL && open > 0.985 ? 1 : 0)
+      const dp = pi - pr; if (Math.abs(dp) > 1e-5) leafDir.current[i] = dp > 0 ? 1 : -1
+      stepLeaf(leaves[i - 1], -Math.PI * ease(pi) * 0.998, 0.025 + (MAXL - i) * DY, dt, t, ease(pi), leafDir.current[i] ?? 1, i === MAXL && open > 0.985 ? 1 : 0)
     }
     const o = ease(open)
     if (root.current) root.current.position.x = (1 - o) * W / 2
@@ -211,6 +215,35 @@ function Scene({ low, pages, zoomOut, openRef, seed, page, ghazal, data, onFlip 
   )
 }
 
+// Phones get bloom only: depth of field is the expensive pass
+const TOUCH = window.matchMedia('(pointer: coarse)').matches
+// Bloom on the candle flames, glints on the brass, and a soft focus falling off behind the book. The composer renders to a linear
+// target, so tone mapping moves from the renderer into the effect chain.
+const FOCUS = new THREE.Vector3(0, 0.35, 0)
+function Effects({ zoomOut }: { zoomOut: boolean }) {
+  const gl = useThree(st => st.gl)
+  const dof = useRef<any>(null)
+  // keep the focal plane on the book however the camera moves; blur only what is clearly in front of or behind it
+  useFrame(({ camera }) => {
+    const e = dof.current; if (!e) return
+    e.circleOfConfusionMaterial.worldFocusDistance = camera.position.distanceTo(FOCUS)
+    e.circleOfConfusionMaterial.worldFocusRange = 1.6
+    e.bokehScale = zoomOut ? 0 : 2.4
+  })
+  useEffect(() => {
+    const prev = gl.toneMapping
+    gl.toneMapping = THREE.NoToneMapping
+    return () => { gl.toneMapping = prev }
+  }, [gl])
+  return (
+    <EffectComposer multisampling={4} enableNormalPass={false}>
+      <>{!TOUCH && <DepthOfField ref={dof} bokehScale={2.4} height={480} />}</>
+      <Bloom mipmapBlur luminanceThreshold={0.8} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+    </EffectComposer>
+  )
+}
+
 const MAX_DPR = Math.min(window.devicePixelRatio, 2) // phones are 3x; 2x is crisp enough and keeps the GPU load sane
 const MIN_DPR = Math.min(window.devicePixelRatio, 1.25)
 export default function Book3D(props: Omit<Props, 'low'>) {
@@ -220,6 +253,7 @@ export default function Book3D(props: Omit<Props, 'low'>) {
     <Canvas shadows dpr={dpr} camera={{ fov: 40, near: 0.1, far: 60, position: [0, 3.2, 3.8] }} onCreated={({ gl }) => { gl.toneMappingExposure = 1.05 }} style={{ position: 'fixed', inset: 0, direction: 'ltr' }}>
       <PerformanceMonitor onDecline={() => { setDpr(MIN_DPR); setLow(true) }} onIncline={() => { setDpr(MAX_DPR); setLow(false) }} />
       <Scene {...props} low={low} />
+      {!low && <Effects zoomOut={props.zoomOut} />}
     </Canvas>
   )
 }

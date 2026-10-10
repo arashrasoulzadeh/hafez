@@ -1,14 +1,15 @@
 import * as THREE from 'three'
 import { SEG, LW, LD, TH } from './constants'
 
-const K = 600 // stiffness between neighbouring segments
-const C_AIR = 2.0 // air drag on each segment (makes the free edge lag behind the hinge)
-const C_REL = 8 // internal damping, so waves die out
-const G = 25 // pull towards the surface the page rests on
+const K_TRACK = 900 // how hard each segment chases its target angle
+const C_TRACK = 40 // damping of that chase (slightly under-damped: a little flutter on landing)
+const K_LINK = 200 // stiffness between neighbouring segments (the paper resists sharp creases)
+const C_LINK = 6
+const LEAD = 0.9 // radians the free edge runs ahead of the hinge at mid-flip, like a page lifted by its edge
 const PI = Math.PI
 
-// A page made of SEG stiff segments joined by springs. The hinge angle is driven by the animation; the rest follows physically,
-// so the free edge trails the hinge, overshoots and settles when the page lands.
+// A page made of SEG segments. Each chases a target angle (hinge + a lead that grows towards the free edge) through a damped spring,
+// and neighbouring segments are linked, so the page arches in flight, lands free edge first and settles with a small flutter.
 export type Leaf = { geo: THREE.BufferGeometry; a: Float32Array; v: Float32Array; hinge: number; ready: boolean }
 
 export function makeLeaf(): Leaf {
@@ -27,21 +28,24 @@ export function makeLeaf(): Leaf {
   return { geo: g, a: new Float32Array(SEG), v: new Float32Array(SEG), hinge: 0, ready: false }
 }
 
-// Advance the page by dt seconds. `lift` (0..1) is a gentle breeze on a resting page. Returns false when nothing moved (skip the upload).
-export function stepLeaf(l: Leaf, hinge: number, y0: number, dt: number, t: number, lift = 0): boolean {
+// Advance the page by dt seconds. `e` is the flip progress (0..1, eased), `dir` +1 while opening and -1 while closing,
+// `lift` (0..1) is a gentle breeze on a resting page. Returns false when nothing moved (skip the upload).
+export function stepLeaf(l: Leaf, hinge: number, y0: number, dt: number, t: number, e: number, dir: number, lift = 0): boolean {
   const { a, v } = l
   let energy = 0
   for (let k = 1; k < SEG; k++) energy += Math.abs(v[k])
   if (l.ready && lift === 0 && Math.abs(hinge - l.hinge) < 1e-6 && energy < 2e-3) return false
   if (!l.ready) { a.fill(hinge); v.fill(0) }
-  const h = Math.min(dt, 1 / 30) / 2
-  for (let sub = 0; sub < 2; sub++) {
+  // fixed-size physics steps (≈120 Hz) so a slow frame still advances in real time instead of lagging behind the animation
+  const dtc = Math.min(dt, 0.1), steps = Math.max(2, Math.ceil(dtc / 0.0083)), h = dtc / steps, amp = LEAD * Math.sin(PI * e) * dir
+  for (let sub = 0; sub < steps; sub++) {
     a[0] = hinge
     for (let k = 1; k < SEG; k++) {
-      const s = k / SEG, rest = a[k] < -PI / 2 ? -PI : 0
-      let acc = K * (a[k - 1] - a[k]) - C_AIR * v[k] - C_REL * (v[k] - v[k - 1]) + G * (rest - a[k]) * s
-      if (k < SEG - 1) acc += K * (a[k + 1] - a[k]) - C_REL * (v[k] - v[k + 1])
-      if (lift) acc += lift * 3.2 * s * s * (0.55 + 0.45 * Math.sin(t * 1.1 + k * 0.4))
+      const s = k / SEG, up = k < SEG - 1
+      let target = hinge - amp * Math.pow(s, 1.5)
+      if (lift) target += lift * 0.12 * s * s * (0.55 + 0.45 * Math.sin(t * 1.1 + k * 0.4)) // the breeze lifts the free edge
+      const acc = K_TRACK * (target - a[k]) - C_TRACK * v[k]
+        + K_LINK * (a[k - 1] + (up ? a[k + 1] : a[k]) - 2 * a[k]) - C_LINK * (2 * v[k] - v[k - 1] - (up ? v[k + 1] : v[k]))
       v[k] += acc * h; a[k] += v[k] * h
       if (a[k] > 0.02) { a[k] = 0.02; v[k] *= -0.2 } else if (a[k] < -PI - 0.02) { a[k] = -PI - 0.02; v[k] *= -0.2 } // can't pass through the page below
     }

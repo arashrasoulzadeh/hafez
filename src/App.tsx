@@ -42,6 +42,7 @@ export default function App() {
   const prog = useRef({ v: 0 })
   const flipRef = useRef<(rate?: number, gain?: number) => void>(() => {})
 
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __openRef: typeof openRef }).__openRef = openRef }, []) // dev only: lets me scrub the opening animation
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}ghazals.json`).then(r => r.json()).then(setData) }, [])
   // Back button: the open book and every overlay push a history entry, so the browser / Android back button peels them off one by one
   const layers = useRef<{ id: string; close: () => void }[]>([])
