@@ -181,8 +181,9 @@ export function poemPage(g: Ghazal | null, rotate = false, k = POEM_Q) {
     const right = PW - 72 - COL / 2, left = 72 + COL / 2
     rows.forEach((cp, i) => {
       const y = top + i * lh
-      x.fillText(cp.v[0], right, y, COL)
-      if (cp.v[1]) x.fillText(cp.v[1], left, y, COL)
+      x.lineWidth = 1.3; x.strokeStyle = INK // a hairline stroke thickens the thin nastaliq strokes so they survive resampling
+      x.fillText(cp.v[0], right, y, COL); x.strokeText(cp.v[0], right, y, COL)
+      if (cp.v[1]) { x.fillText(cp.v[1], left, y, COL); x.strokeText(cp.v[1], left, y, COL) }
       x.fillStyle = ACCENT; x.beginPath(); x.arc(PW / 2, y - fs * 0.3, 3, 0, Math.PI * 2); x.fill(); x.fillStyle = INK
     })
   }

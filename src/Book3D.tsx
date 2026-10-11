@@ -218,7 +218,7 @@ function Scene({ reading, low, pages, zoomOut, openRef, seed, page, ghazal, data
 const TOUCH = window.matchMedia('(pointer: coarse)').matches
 const Effects = lazy(() => import('./Effects')) // own chunk
 
-const MAX_DPR = Math.min(window.devicePixelRatio, TOUCH ? 2 : 1.75) // phones 2x keep text crisp; desktops 1.75x (retina is 2x) to spare fill rate and memory
+const MAX_DPR = Math.min(window.devicePixelRatio, 2) // native resolution up to 2x: a canvas drawn below the screen's pixel ratio is resampled by the browser, which softens text
 const MIN_DPR = Math.min(window.devicePixelRatio, 1.25)
 // Render only as often as needed: full rate while something moves, a calm rate while the scene just idles (candle flicker, smoke).
 // A frame is never drawn in a hidden tab (rAF is paused there).
