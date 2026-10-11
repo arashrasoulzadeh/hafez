@@ -128,7 +128,7 @@ export default function App() {
         </div>
       )}
       <footer className="credits">
-        <span>ساخته‌شده توسط <a href="https://github.com/arashrasoulzadeh" target="_blank" rel="noreferrer">آرش رسول‌زاده</a></span>
+        <span>ساخته‌شده توسط <a href="https://github.com/arashrasoulzadeh/hafez" target="_blank" rel="noreferrer">آرش رسول‌زاده</a></span>
         <span>با کمک <a href="https://claude.com/claude-code" target="_blank" rel="noreferrer">Claude</a></span>
         <span>متن غزل‌ها و تفسیر: <a href="https://ganjoor.net/hafez" target="_blank" rel="noreferrer">گنجور</a></span>
       </footer>

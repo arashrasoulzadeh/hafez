@@ -14,6 +14,7 @@ const FOCUS = new THREE.Vector3(0, 0.35, 0)
 export default function Effects({ zoomOut, reading }: { zoomOut: boolean; reading: boolean }) {
   const gl = useThree(st => st.gl)
   const dof = useRef<any>(null)
+  const bloom = useRef<any>(null)
   const st = useRef({ range: 1.7, bokeh: 2.2, y: 0.35 })
   useEffect(() => {
     const prev = gl.toneMapping
@@ -31,11 +32,12 @@ export default function Effects({ zoomOut, reading }: { zoomOut: boolean; readin
     e.circleOfConfusionMaterial.worldFocusDistance = camera.position.distanceTo(FOCUS)
     e.circleOfConfusionMaterial.worldFocusRange = s.range
     e.bokehScale = s.bokeh
+    if (bloom.current) bloom.current.intensity += ((reading ? 0.22 : 0.6) - bloom.current.intensity) * k // no haze over the page while reading
   })
   return (
     <EffectComposer multisampling={0} enableNormalPass={false}>
-      <DepthOfField ref={dof} bokehScale={2.4} height={TOUCH ? 300 : 440} />
-      <Bloom mipmapBlur luminanceThreshold={0.8} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
+      <DepthOfField ref={dof} bokehScale={2.4} height={TOUCH ? 320 : 540} />
+      <Bloom ref={bloom} mipmapBlur luminanceThreshold={1.05} luminanceSmoothing={0.15} intensity={0.6} radius={0.7} />
       <SMAA />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>

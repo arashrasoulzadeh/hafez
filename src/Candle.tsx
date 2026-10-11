@@ -5,6 +5,9 @@ import { M } from './materials'
 import { world } from './constants'
 import { once, softTexture } from './textures'
 
+const FLAME_OUTER = new THREE.Color(2.6, 1.15, 0.2) // >1: only these (and specular glints) pass the bloom threshold
+const FLAME_CORE = new THREE.Color(3.2, 2.9, 1.9)
+
 // A brass-based wax candle with a layered, flickering flame, a soft glow sprite and its own warm light.
 export default function Candle({ position, phase = 0, height = 0.55, moth = false }: { position: [number, number, number]; phase?: number; height?: number; moth?: boolean }) {
   const flame = useRef<THREE.Group>(null), light = useRef<THREE.PointLight>(null), glow = useRef<THREE.Sprite>(null)
@@ -28,8 +31,8 @@ export default function Candle({ position, phase = 0, height = 0.55, moth = fals
       <mesh position={[0.05, top - 0.07, 0.03]} scale={[1, 2.5, 1]}><sphereGeometry args={[0.016, 8, 8]} /><meshStandardMaterial color="#efe3c4" roughness={0.6} /></mesh>
       <mesh position-y={top + 0.03}><cylinderGeometry args={[0.004, 0.004, 0.05, 6]} /><meshStandardMaterial color="#15110d" /></mesh>
       <group ref={flame} position-y={top + 0.045}>
-        <mesh geometry={flameGeo}><meshBasicMaterial color="#ff8a1f" transparent opacity={0.8} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} /></mesh>
-        <mesh geometry={flameGeo} scale={[0.55, 0.62, 0.55]} position-y={0.004}><meshBasicMaterial color="#fff1b8" toneMapped={false} /></mesh>
+        <mesh geometry={flameGeo}><meshBasicMaterial color={FLAME_OUTER} transparent opacity={0.85} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} /></mesh>
+        <mesh geometry={flameGeo} scale={[0.55, 0.62, 0.55]} position-y={0.004}><meshBasicMaterial color={FLAME_CORE} toneMapped={false} /></mesh>
         <mesh position-y={0.005} scale={[1, 0.6, 1]}><sphereGeometry args={[0.018, 10, 8]} /><meshBasicMaterial color="#5a7bff" transparent opacity={0.55} depthWrite={false} /></mesh>
         <sprite ref={glow} position-y={0.1}><spriteMaterial map={glowTex} transparent depthWrite={false} blending={THREE.AdditiveBlending} color="#ffb060" opacity={0.55} toneMapped={false} /></sprite>
       </group>
