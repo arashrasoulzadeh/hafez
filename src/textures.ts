@@ -2,6 +2,9 @@ import * as THREE from 'three'
 import { cleanTafsir, TAFSIR_NOTE, type Ghazal } from './types'
 
 export const QUALITY = 1 // full-size page and cover canvases on every device: phones need the sharpness most
+const TOUCH = window.matchMedia('(pointer: coarse)').matches
+const TAFSIR_Q = TOUCH ? 1 : 1.5 // small type on a big desktop page: 1536 px wide so it stays crisp at retina size
+export const POEM_Q = TOUCH ? 1 : 1.25
 
 // Textures shared by many objects are built once
 const cache = new Map<string, THREE.Texture>()
@@ -31,7 +34,7 @@ export function kashiTexture() {
   for (let i = 0; i < 2; i++) { g.save(); g.translate(128, 128); g.rotate(i * Math.PI / 4); g.strokeRect(-64, -64, 128, 128); g.restore() }
   g.beginPath(); g.arc(128, 128, 30, 0, 7); g.stroke()
   g.strokeStyle = '#0d4c6b'; g.lineWidth = 6; g.strokeRect(0, 0, 256, 256)
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 3); t.anisotropy = 4
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 3); t.anisotropy = 8
   return t
 }
 
@@ -105,7 +108,7 @@ export function coverTexture() {
   g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillText('حافظ', cx + 5, cy + 30 + 6); g.fillStyle = gold; g.fillText('حافظ', cx, cy + 30)
   g.font = '50px Vazirmatn, sans-serif'; g.fillStyle = gold; g.fillText('دیوان لسان‌الغیب', cx, cy + 150)
   g.font = '34px Vazirmatn, sans-serif'; g.globalAlpha = 0.85; g.fillText('خواجه شمس‌الدین محمد شیرازی', cx, cy + 215); g.globalAlpha = 1
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
   return t
 }
 export function grainTexture() { // leather grain used as bump map
@@ -132,7 +135,7 @@ export function endpaperTexture() { // marbled endpaper, visible on the inside o
 }
 
 const PAPER = '#efe3c2'
-const PW = 1024, PH = 1432, INK = '#2a1c10', ACCENT = '#854F0B'
+const PW = 1024, PH = 1432, INK = '#1d130a', ACCENT = '#7a4709'
 let paperBase: HTMLCanvasElement | null = null // paper colour + fibres, drawn once at half size and reused by every page
 function basePaper() {
   if (paperBase) return paperBase
@@ -158,11 +161,11 @@ function shamse(x: CanvasRenderingContext2D, cx: number, cy: number, r: number) 
   x.beginPath(); x.arc(0, 0, r * 0.2, 0, Math.PI * 2); x.fill(); x.restore()
 }
 function finish(c: HTMLCanvasElement, rotate: boolean) {
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
   if (rotate) { t.center.set(0.5, 0.5); t.rotation = Math.PI } // back faces are seen upside down once flipped
   return t
 }
-export function poemPage(g: Ghazal | null, rotate = false, k = QUALITY) {
+export function poemPage(g: Ghazal | null, rotate = false, k = POEM_Q) {
   const { c, x } = paper(k)
   if (g) {
     const rows = g.couplets.slice(0, 16)
@@ -193,33 +196,35 @@ export function plainPage() { // the flyleaf: nothing on it
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t
 }
 export function tafsirPage(g: Ghazal | null) {
-  const { c, x } = paper(QUALITY)
+  const { c, x } = paper(TAFSIR_Q)
   if (g) {
     x.textAlign = 'right'
-    const blocks: { t: string; label?: boolean }[] = []
-    if (g.summary) blocks.push({ t: cleanTafsir(g.summary) })
-    g.couplets.forEach((cp, i) => { if (cp.s) { blocks.push({ t: `بیت ${i + 1}`, label: true }); blocks.push({ t: cleanTafsir(cp.s) }) } })
-    const layout = (fs: number) => {
-      x.font = `${fs}px Vazirmatn, sans-serif`
-      const out: { t: string; label?: boolean }[] = []
-      for (const b of blocks) {
-        if (b.label) { out.push(b); continue }
-        let line = ''
-        for (const w of b.t.split(' ')) { const tr = line ? `${line} ${w}` : w; if (x.measureText(tr).width > 840 && line) { out.push({ t: line }); line = w } else line = tr }
-        if (line) out.push({ t: line })
-      }
+    const wrap = (t: string, fs: number) => {
+      x.font = `500 ${fs}px Vazirmatn, sans-serif`
+      const out: string[] = []; let line = ''
+      for (const w of t.split(' ')) { const tr = line ? `${line} ${w}` : w; if (x.measureText(tr).width > 850 && line) { out.push(line); line = w } else line = tr }
+      if (line) out.push(line)
       return out
     }
-    let fs = 36, rows = layout(fs)
-    while (rows.length * fs * 1.75 > 1060 && fs > 22) { fs -= 2; rows = layout(fs) }
-    const maxRows = Math.floor(1060 / (fs * 1.75))
-    if (rows.length > maxRows) { rows = rows.slice(0, maxRows); rows[maxRows - 1] = { t: rows[maxRows - 1].t + ' …' } }
-    x.textAlign = 'center'; shamse(x, PW / 2, 100, 30); x.fillStyle = ACCENT; x.font = '36px Vazirmatn, sans-serif'; x.fillText('تفسیر', PW / 2, 175)
-    x.textAlign = 'right'; let y = 260
-    for (const r of rows) {
-      x.fillStyle = r.label ? ACCENT : INK; x.font = `${r.label ? fs - 4 : fs}px Vazirmatn, sans-serif`
-      x.fillText(r.t, PW - 90, y); y += fs * 1.75
+    // The page carries the overall interpretation at the largest size that fits, then as many bayt notes as there is room for;
+    // the full bayt-by-bayt text is in the reading sheet. Big type matters more here than completeness.
+    const summary = g.summary ? cleanTafsir(g.summary) : ''
+    let fs = 40
+    for (const f of [42, 38, 35, 32, 30]) { fs = f; if (!summary || wrap(summary, f).length * f * 1.7 <= 840) break }
+    const lh = fs * 1.7, top = 255, bottom = PH - 140
+    let y = top
+    const draw = (t: string, color: string, size = fs) => { x.fillStyle = color; x.font = `500 ${size}px Vazirmatn, sans-serif`; x.fillText(t, PW - 85, y); y += lh * (size / fs) }
+    if (summary) for (const l of wrap(summary, fs)) { if (y > bottom) break; draw(l, INK) }
+    let cut = false
+    for (let i = 0; i < g.couplets.length && !cut; i++) {
+      const s2 = g.couplets[i].s; if (!s2) continue
+      const rows = wrap(cleanTafsir(s2), fs)
+      if (y + lh * 0.6 + rows.length * lh > bottom) { cut = true; break }
+      y += lh * 0.25; draw(`بیت ${i + 1}`, ACCENT, fs - 6)
+      for (const l of rows) draw(l, INK)
     }
+    if (cut || y > bottom) { x.textAlign = 'center'; x.fillStyle = ACCENT; x.font = `500 ${fs - 6}px Vazirmatn, sans-serif`; x.fillText('ادامه و تفسیر هر بیت: دکمه «خواندن»', PW / 2, PH - 150) }
+    x.textAlign = 'center'; shamse(x, PW / 2, 100, 30); x.fillStyle = ACCENT; x.font = '500 38px Vazirmatn, sans-serif'; x.fillText('تفسیر', PW / 2, 175)
   }
   if (g) { x.textAlign = 'center'; x.fillStyle = ACCENT; x.globalAlpha = 0.8; x.font = '24px Vazirmatn, sans-serif'; x.fillText(TAFSIR_NOTE, PW / 2, PH - 84, 860); x.globalAlpha = 1 }
   return finish(c, false)
@@ -236,7 +241,7 @@ export function woodTexture() {
     for (let px = 0; px <= 1024; px += 64) x.lineTo(px, y + Math.sin(px / 150 + i) * 6)
     x.stroke()
   }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 6); t.anisotropy = 4
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 6); t.anisotropy = 8
   return t
 }
 export function edgeTexture() { // stacked page edges

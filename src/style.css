@@ -58,7 +58,7 @@ html,body,#root{margin:0;height:100%;background:var(--night);color:var(--paper);
 .tabs{display:flex;gap:6px}
 .tabs button{background:transparent;border:1px solid #8a6a2a;color:#854F0B;border-radius:16px;padding:5px 18px;font:500 14px 'Vazirmatn';cursor:pointer}
 .tabs button.on{background:#854F0B;color:var(--paper)}
-.poem-read p{margin:0 0 6px;display:flex;flex-wrap:wrap;justify-content:center;gap:0 2.2rem;font-family:'Noto Nastaliq Urdu','Vazirmatn',serif;font-size:clamp(20px,5.6vw,27px);line-height:2.35;text-align:center}
+.poem-read p{margin:0 0 4px;display:grid;grid-template-columns:1fr 1fr;gap:0 clamp(10px,3vw,28px);font-family:'Noto Nastaliq Urdu','Vazirmatn',serif;font-size:clamp(12.5px,3.8vw,25px);line-height:2.3;text-align:center}
 @keyframes rise{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 .sheet{animation:rise .35s ease-out}
 @media (max-width:600px){
